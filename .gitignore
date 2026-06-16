@@ -56,3 +56,26 @@ tmp_check_tables.php
 
 # 12. Server-specific (modified by admin panel)
 .htaccess
+
+# 12b. Agent / IDE / workspace (chi dung khi phat trien, KHONG deploy ra server)
+/.agent/
+/.kiro/
+/.claude/
+/AGENTS.md
+*.code-workspace
+
+# 13. Addon domains chung public_html (deploy = public_html root).
+# Moi folder o day la MOT WEBSITE RIENG — khong duoc git track/add/xoa.
+# Folder blog khong co dau cham; addon deu la ten mien .com/.vn -> pattern bat het,
+# tu bao ve ca addon tao sau nay. (KHONG xoa file, chi ngan git add nham.)
+/*.com/
+/*.vn/
+/docs/
+
+# 14. WordPress cu con sot trong docroot (xoa THU CONG sau khi blog chay on).
+/wp-admin/
+/wp-includes/
+/wp-content/
+/wp-config.php
+/xmlrpc.php
+/wp-login.php

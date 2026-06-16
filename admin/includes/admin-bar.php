@@ -82,8 +82,11 @@ if (!isset($site_name))
                         <i class="bi bi-images" style="color:#16a34a;"></i> Banner
                     </a>
                     <div style="border-top:1px solid #3c434a;margin:4px 0;"></div>
-                    <a href="<?php echo BASE_URL; ?>admin/contacts/index.php?tab=consultation" class="wp-qa-item">
-                        <i class="bi bi-people-fill" style="color:#db2777;"></i> Tư vấn dịch vụ
+                    <a href="<?php echo BASE_URL; ?>admin/contacts/index.php" class="wp-qa-item">
+                        <i class="bi bi-people-fill" style="color:#db2777;"></i> Liên hệ
+                    </a>
+                    <a href="<?php echo BASE_URL; ?>admin/conversions/index.php" class="wp-qa-item">
+                        <i class="bi bi-graph-up-arrow" style="color:#16a34a;"></i> Thống kê chuyển đổi
                     </a>
                     <a href="<?php echo BASE_URL; ?>admin/settings/index.php" class="wp-qa-item">
                         <i class="bi bi-gear-fill" style="color:#0284c7;"></i> Cấu hình
@@ -190,19 +193,18 @@ if (!isset($site_name))
                 }
             </script>
 
-            <!-- Registrations -->
+            <!-- Liên hệ -->
             <div id="wp-registrations-item" style="position:relative;display:flex;align-items:center;">
-                <a href="<?php echo BASE_URL; ?>admin/contacts/index.php?tab=consultation" title="Tư vấn dịch vụ"
+                <a href="<?php echo BASE_URL; ?>admin/contacts/index.php" title="Liên hệ"
                     style="color:#c3c4c7;text-decoration:none;padding:0 8px;height:32px;display:flex;align-items:center;gap:5px;transition:color .1s,background .1s;"
                     onmouseover="this.style.color='#00b9eb';this.style.background='#32373c'"
                     onmouseout="this.style.color='#c3c4c7';this.style.background='transparent'">
-                    <i class="bi bi-person-lines-fill" style="font-size:13px;"></i> Tư vấn dịch vụ
+                    <i class="bi bi-person-lines-fill" style="font-size:13px;"></i> Liên hệ
                     <?php
                     try {
-                        // Use global $pdo if available
                         global $pdo;
                         if (isset($pdo)) {
-                            $pending_stmt = $pdo->query("SELECT COUNT(*) FROM service_registrations WHERE status = 'pending'");
+                            $pending_stmt = $pdo->query("SELECT COUNT(*) FROM contacts WHERE status = '0'");
                             $pending_num = $pending_stmt ? $pending_stmt->fetchColumn() : 0;
                             if ($pending_num > 0): ?>
                                 <span
@@ -219,11 +221,11 @@ if (!isset($site_name))
                     style="display:none;position:absolute;top:32px;left:0;width:300px;background:#23282d;box-shadow:0 8px 15px rgba(0,0,0,0.3);border-radius:0 0 4px 4px;padding:12px;z-index:999999;border:1px solid #3c434a;border-top:none;">
                     <h6
                         style="color:#00b9eb;font-size:11px;text-transform:uppercase;margin:0 0 10px 0;padding-bottom:8px;border-bottom:1px solid #3c434a;display:flex;align-items:center;gap:6px;">
-                        <i class="bi bi-clock-history"></i> Tư vấn dịch vụ mới
+                        <i class="bi bi-clock-history"></i> Liên hệ mới
                     </h6>
                     <div class="text-white small">
-                        <a href="<?php echo BASE_URL; ?>admin/contacts/index.php?tab=consultation"
-                            class="text-info text-decoration-none">Xem tất cả tư vấn dịch vụ</a>
+                        <a href="<?php echo BASE_URL; ?>admin/contacts/index.php"
+                            class="text-info text-decoration-none">Xem tất cả liên hệ</a>
                     </div>
                 </div>
             </div>

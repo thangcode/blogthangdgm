@@ -532,7 +532,7 @@ if (!headers_sent()) {
             </a>
 
             <div class="sidebar-label mt-3">Khách hàng</div>
-            <a href="<?php echo BASE_URL; ?>admin/contacts/index.php?tab=consultation"
+            <a href="<?php echo BASE_URL; ?>admin/contacts/index.php"
                 class="nav-link-admin <?php echo ($current_page == 'contacts') ? 'active' : ''; ?>">
                 <i class="bi bi-person-lines-fill"></i> Quản lý liên hệ
                 <?php
@@ -558,6 +558,10 @@ catch (Exception $e) { /* Ignore sidebar error */
             <a href="<?php echo BASE_URL; ?>admin/traffic/index.php"
                 class="nav-link-admin <?php echo ($current_page == 'traffic') ? 'active' : ''; ?>">
                 <i class="bi bi-bar-chart-line"></i> Lưu lượng truy cập
+            </a>
+            <a href="<?php echo BASE_URL; ?>admin/conversions/index.php"
+                class="nav-link-admin <?php echo ($current_page == 'conversions') ? 'active' : ''; ?>">
+                <i class="bi bi-graph-up-arrow"></i> Thống kê chuyển đổi
             </a>
 
             <div class="sidebar-label mt-3">Marketing</div>

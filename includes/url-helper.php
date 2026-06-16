@@ -167,8 +167,12 @@ function replaceHtaccessSection($marker, $content)
     $pattern = '/'.preg_quote($beginMarker, '/').'.*?'.preg_quote($endMarker, '/').'/s';
 
     if (preg_match($pattern, $htaccess)) {
-        // Replace existing block
-        $htaccess = preg_replace($pattern, $newBlock, $htaccess);
+        // Replace existing block.
+        // Dùng callback để chuỗi thay thế được giữ NGUYÊN VĂN: tránh preg_replace hiểu
+        // nhầm $1, $2 (backreference của RewriteRule) thành backreference của pattern.
+        $htaccess = preg_replace_callback($pattern, static function () use ($newBlock) {
+            return $newBlock;
+        }, $htaccess);
     } elseif ($newBlock !== '') {
         // Append before ErrorDocument line, or at end of file
         $errorDocPos = strpos($htaccess, '# Handle 404');
@@ -195,7 +199,22 @@ function generateRewriteRules()
     $prefixes = getUrlPrefixes();
     $category = $prefixes['category'];
 
+    // Domain chính (cấu hình được). Khóa rewrite của blog chỉ chạy cho domain chính + môi trường dev,
+    // tránh ảnh hưởng các addon domain dùng chung thư mục public_html.
+    $primaryDomain = function_exists('get_setting') ? trim((string) get_setting('site_primary_domain', 'thang-dgm.com')) : 'thang-dgm.com';
+    if ($primaryDomain === '') {
+        $primaryDomain = 'thang-dgm.com';
+    }
+    $primaryDomain = preg_replace('/[^a-z0-9.\-]/i', '', $primaryDomain); // chỉ giữ ký tự hợp lệ của domain
+    $domainEsc = str_replace('.', '\.', $primaryDomain);                  // escape dấu chấm cho regex Apache
+
     return <<<RULES
+# Khóa host: chỉ áp dụng rewrite của blog cho domain chính + dev (bỏ qua addon domain cùng public_html)
+RewriteCond %{HTTP_HOST} !^(www\.)?{$domainEsc}$ [NC]
+RewriteCond %{HTTP_HOST} !^(localhost|127\.0\.0\.1)(:\d+)?$ [NC]
+RewriteCond %{HTTP_HOST} !\.(test|local)$ [NC]
+RewriteRule ^ - [L]
+
 # Friendly URLs for Categories
 RewriteCond %{THE_REQUEST} \s/category\.php\?slug=([^\s&]+) [NC]
 RewriteRule ^ {$category}/%1/? [R=301,L]

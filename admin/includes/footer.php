@@ -3,6 +3,7 @@
 
 <!-- Bootstrap Bundle with Popper -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script src="<?php echo BASE_URL; ?>assets/js/password-toggle.js?v=<?php echo @filemtime(dirname(__DIR__, 2) . '/assets/js/password-toggle.js') ?: '1'; ?>"></script>
 <script>
     // ========================================
     // GLOBAL LOADING EFFECT SYSTEM - DISABLED

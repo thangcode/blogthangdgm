@@ -201,6 +201,7 @@ endif; ?>
             <a href="../index.php" class="text-decoration-none text-muted">&larr; Quay về trang chủ</a>
         </div>
     </div>
+    <script src="<?php echo BASE_URL; ?>assets/js/password-toggle.js?v=<?php echo @filemtime(dirname(__DIR__) . '/assets/js/password-toggle.js') ?: '1'; ?>"></script>
 </body>
 
 </html>

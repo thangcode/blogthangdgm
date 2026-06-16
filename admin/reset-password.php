@@ -208,6 +208,7 @@ else: ?>
 endif; ?>
         </div>
     </div>
+    <script src="<?php echo BASE_URL; ?>assets/js/password-toggle.js?v=<?php echo @filemtime(dirname(__DIR__) . '/assets/js/password-toggle.js') ?: '1'; ?>"></script>
 </body>
 
 </html>

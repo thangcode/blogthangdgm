@@ -436,7 +436,7 @@ $needs_locations_js = !empty($GLOBALS['require_locations_js']);
 
     .back-to-top {
         position: fixed;
-        bottom: 90px;
+        bottom: 30px;
         right: 25px;
         width: 50px;
         height: 50px;
@@ -773,7 +773,7 @@ $needs_locations_js = !empty($GLOBALS['require_locations_js']);
         }
 
         .back-to-top {
-            bottom: 84px;
+            bottom: 24px;
             right: 15px;
             width: 45px;
             height: 45px;

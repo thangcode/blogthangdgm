@@ -59,6 +59,7 @@ tmp_check_tables.php
 
 # 12b. Agent / IDE / workspace (chi dung khi phat trien, KHONG deploy ra server)
 /.agent/
+/.agents/
 /.kiro/
 /.claude/
 /AGENTS.md

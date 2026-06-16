@@ -42,6 +42,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         redirect($trafficReturnUrl);
     }
+
+    if ($trafficAction === 'save_firewall') {
+        require_valid_csrf_token();
+        $ok = function_exists('security_fw_save_settings') ? security_fw_save_settings($pdo, $_POST) : false;
+        $_SESSION['traffic_flash'] = [
+            'type' => $ok ? 'success' : 'danger',
+            'message' => $ok ? 'Da luu cau hinh tuong lua.' : 'Khong luu duoc cau hinh tuong lua.',
+        ];
+        redirect($trafficReturnUrl);
+    }
 }
 
 $current_page = 'traffic';
@@ -343,6 +353,10 @@ foreach ($blockedIpRows as $blockedIpRow) {
     $blockedIpMap[(string) ($blockedIpRow['ip_address'] ?? '')] = $blockedIpRow;
 }
 
+$fwSettings = function_exists('security_fw_settings')
+    ? security_fw_settings($pdo)
+    : ['enabled' => false, 'block_bad_ua' => false, 'autoban_enabled' => false, 'autoban_threshold' => 240, 'autoban_window' => 60, 'autoban_duration' => 3600, 'whitelist_ips' => '', 'bad_ua_extra' => ''];
+
 function traffic_split_pageviews_by_gap(array $pageviews, int $gapSeconds = 600): array
 {
     $chunks = [];
@@ -569,6 +583,22 @@ $pageviewsPerSession = (int) ($summary['sessions'] ?? 0) > 0 ? round(((int) ($su
 <?php if (!empty($activeFilters)): ?>
 <div class="alert alert-info border-0 shadow-sm mb-4">Đang lọc theo: <?php echo htmlspecialchars(implode(' | ', $activeFilters)); ?></div>
 <?php endif; ?>
+<div class="traffic-table-card p-4 mb-4">
+<div class="traffic-section-head"><div><h5 class="mb-0">Tường lửa &amp; chống bot/flood</h5><div class="traffic-small mt-2">Tự động chặn user-agent xấu (scanner/scraper) và auto-ban IP khi vượt ngưỡng request. Các bot lớn hợp lệ (Googlebot, Bingbot, Facebook...) luôn được bỏ qua, không bao giờ bị chặn.</div></div><div class="traffic-section-meta"><?php echo $fwSettings['enabled'] ? 'Đang bật' : 'Đang tắt'; ?></div></div>
+<form method="POST" class="row g-3 mb-2">
+<input type="hidden" name="csrf_token" value="<?php echo e(generate_csrf_token()); ?>">
+<input type="hidden" name="traffic_action" value="save_firewall">
+<div class="col-md-4"><div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="fwEnabled" name="security_fw_enabled" <?php echo $fwSettings['enabled'] ? 'checked' : ''; ?>><label class="form-check-label" for="fwEnabled">Bật tường lửa</label></div></div>
+<div class="col-md-4"><div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="fwBadUa" name="security_fw_block_bad_ua" <?php echo $fwSettings['block_bad_ua'] ? 'checked' : ''; ?>><label class="form-check-label" for="fwBadUa">Chặn user-agent xấu</label></div></div>
+<div class="col-md-4"><div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="fwAutoban" name="security_fw_autoban_enabled" <?php echo $fwSettings['autoban_enabled'] ? 'checked' : ''; ?>><label class="form-check-label" for="fwAutoban">Auto-ban theo ngưỡng request</label></div></div>
+<div class="col-md-4"><label class="form-label">Ngưỡng request</label><input type="number" min="10" name="security_fw_autoban_threshold" class="form-control" value="<?php echo (int) $fwSettings['autoban_threshold']; ?>"><div class="traffic-small mt-1">Số request tối đa trong 1 khung thời gian.</div></div>
+<div class="col-md-4"><label class="form-label">Khung thời gian (giây)</label><input type="number" min="5" name="security_fw_autoban_window" class="form-control" value="<?php echo (int) $fwSettings['autoban_window']; ?>"></div>
+<div class="col-md-4"><label class="form-label">Thời gian ban (giây)</label><input type="number" min="60" name="security_fw_autoban_duration" class="form-control" value="<?php echo (int) $fwSettings['autoban_duration']; ?>"><div class="traffic-small mt-1">Hết hạn sẽ tự mở chặn.</div></div>
+<div class="col-md-6"><label class="form-label">Whitelist IP / CIDR (mỗi dòng 1 mục)</label><textarea name="security_fw_whitelist_ips" class="form-control" rows="3" placeholder="Ví dụ:&#10;123.123.123.123&#10;203.0.113.0/24"><?php echo e($fwSettings['whitelist_ips']); ?></textarea><div class="traffic-small mt-1">IP của bạn / monitoring nên thêm vào đây để không bao giờ bị ban.</div></div>
+<div class="col-md-6"><label class="form-label">User-agent xấu bổ sung (mỗi dòng 1 chuỗi)</label><textarea name="security_fw_bad_ua_extra" class="form-control" rows="3" placeholder="Ví dụ:&#10;BadBot&#10;EvilScraper"><?php echo e($fwSettings['bad_ua_extra']); ?></textarea><div class="traffic-small mt-1">Khớp dạng chứa chuỗi, không phân biệt hoa thường.</div></div>
+<div class="col-12"><button type="submit" class="btn btn-primary">Lưu cấu hình tường lửa</button></div>
+</form>
+</div>
 <div class="traffic-table-card p-4 mb-4">
 <div class="traffic-section-head"><div><h5 class="mb-0">Chặn IP truy cập website</h5><div class="traffic-small mt-2">IP bị chặn sẽ không truy cập được trang ngoài website và các API public liên quan.</div></div><div class="traffic-section-meta"><?php echo number_format(count($blockedIpRows)); ?> IP đang bị chặn</div></div>
 <form method="POST" class="traffic-ip-form mb-3">

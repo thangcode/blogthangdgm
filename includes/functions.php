@@ -89,6 +89,9 @@ function sanitize_uploaded_image(string $path, string $mime): bool
 // Include Core Functions (License Protected)
 require_once __DIR__ . '/core.php';
 
+// Lop tuong lua nhe (chan UA xau + auto-ban theo nguong). An toan: tu nuot loi.
+require_once __DIR__ . '/security-firewall.php';
+
 /**
  * Helper to get image URL with fallback to production URL if local file is missing, or default placeholder if empty.
  */
@@ -1407,6 +1410,18 @@ function enforce_traffic_ip_block($pdo, array $options = [])
         return false;
     }
 
+    // Ban tam thoi (auto-firewall): het han thi tu dong mo, khong chan nua.
+    if (!empty($blockedRow['expires_at'])) {
+        $expireTs = strtotime((string) $blockedRow['expires_at']);
+        if ($expireTs !== false && $expireTs <= time()) {
+            try {
+                traffic_unblock_ip($pdo, $ipAddress);
+            } catch (Throwable $e) {
+            }
+            return false;
+        }
+    }
+
     try {
         $stmt = $pdo->prepare("UPDATE traffic_blocked_ips SET attempts_count = attempts_count + 1, last_attempt_at = NOW() WHERE ip_address = ?");
         $stmt->execute([$ipAddress]);
@@ -1596,6 +1611,9 @@ function frontend_cache_prelude($pdo, $cacheKey, array $context = [])
     }
     if (function_exists('enforce_traffic_ip_block')) {
         enforce_traffic_ip_block($pdo, ['skip_admin' => true]);
+    }
+    if (function_exists('security_fw_guard')) {
+        security_fw_guard($pdo, ['skip_admin' => true]);
     }
     if (function_exists('track_frontend_traffic')) {
         track_frontend_traffic($pdo, $context);

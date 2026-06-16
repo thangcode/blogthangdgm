@@ -25,6 +25,12 @@ if (function_exists('enforce_traffic_ip_block')) {
     ]);
 }
 
+if (function_exists('security_fw_guard')) {
+    security_fw_guard($pdo, [
+        'skip_admin' => true,
+    ]);
+}
+
 if (function_exists('track_frontend_traffic')) {
     track_frontend_traffic($pdo, [
         'page_title' => $page_title ?? $site_name,

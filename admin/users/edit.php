@@ -5,6 +5,7 @@ require_once '../../config/database.php';
 require_once '../../includes/functions.php';
 
 $current_page = 'users';
+ensure_admin_security_columns($pdo);
 require_once '../includes/header.php';
 
 $id = (int)($_GET['id'] ?? 0);
@@ -23,6 +24,18 @@ if (!$user) {
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     require_valid_csrf_token();
+
+    // Tắt/đặt lại 2FA cho tài khoản này (dùng để khôi phục khi chủ tài khoản mất thiết bị).
+    if (($_POST['action'] ?? '') === 'disable_2fa') {
+        $pdo->prepare("UPDATE users SET totp_secret = NULL, totp_enabled = 0 WHERE id = ?")->execute([$id]);
+        if (function_exists('log_activity')) {
+            log_activity('update', 'user', $id, 'Tắt 2FA cho admin: ' . $user['username']);
+        }
+        $success = 'Đã tắt 2FA cho tài khoản này.';
+        $stmt = $pdo->prepare("SELECT * FROM users WHERE id = ?");
+        $stmt->execute([$id]);
+        $user = $stmt->fetch();
+    } else {
     $full_name = trim($_POST['full_name'] ?? '');
     $email = trim($_POST['email'] ?? '');
     $password = $_POST['password'] ?? '';
@@ -82,6 +95,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $error = 'Lỗi: ' . $e->getMessage();
         }
     }
+    } // end else (xử lý cập nhật hồ sơ)
 }
 ?>
 
@@ -148,6 +162,40 @@ endif; ?>
                             </button>
                         </div>
                     </form>
+                </div>
+            </div>
+
+            <?php
+            $is2faOn = !empty($user['totp_enabled']);
+            $isSelf = ($id === (int) $_SESSION['user_id']);
+            ?>
+            <div class="card shadow-sm mt-4">
+                <div class="card-body">
+                    <h5 class="mb-1"><i class="bi bi-shield-lock me-2"></i>Xác thực 2 lớp (2FA)</h5>
+                    <p class="text-muted small mb-3">Mã 6 số từ Google Authenticator / Authy khi đăng nhập.</p>
+
+                    <?php if ($is2faOn): ?>
+                        <div class="alert alert-success d-flex align-items-center mb-3">
+                            <i class="bi bi-check-circle-fill me-2"></i> 2FA đang <strong class="mx-1">BẬT</strong>.
+                        </div>
+                        <form method="POST" action="" onsubmit="return confirm('Tắt/đặt lại 2FA cho tài khoản này? Dùng khi chủ tài khoản mất thiết bị.');">
+                            <input type="hidden" name="csrf_token" value="<?php echo e(generate_csrf_token()); ?>">
+                            <input type="hidden" name="action" value="disable_2fa">
+                            <button type="submit" class="btn btn-outline-danger"><i class="bi bi-x-circle me-1"></i>Tắt / Đặt lại 2FA</button>
+                        </form>
+                        <?php if ($isSelf): ?>
+                            <div class="form-text mt-2">Bạn cũng có thể quản lý 2FA của mình trong <a href="<?php echo BASE_URL; ?>admin/users/profile.php">Hồ sơ</a>.</div>
+                        <?php endif; ?>
+                    <?php else: ?>
+                        <div class="alert alert-secondary d-flex align-items-center mb-2">
+                            <i class="bi bi-shield-x me-2"></i> 2FA đang <strong class="mx-1">TẮT</strong>.
+                        </div>
+                        <?php if ($isSelf): ?>
+                            <a href="<?php echo BASE_URL; ?>admin/users/profile.php" class="btn btn-primary"><i class="bi bi-shield-plus me-1"></i>Thiết lập 2FA</a>
+                        <?php else: ?>
+                            <div class="form-text">Chỉ chủ tài khoản mới bật được 2FA (cần quét mã QR bằng điện thoại của họ) — trong trang <strong>Hồ sơ</strong> của họ.</div>
+                        <?php endif; ?>
+                    <?php endif; ?>
                 </div>
             </div>
         </div>

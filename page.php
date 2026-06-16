@@ -7,6 +7,8 @@ require_once 'includes/page-cache.php';
 require_once 'includes/seo.php';
 require_once 'includes/url-helper.php';
 require_once 'includes/blog.php';
+require_once 'includes/widgets.php';
+require_once 'includes/ad-banners.php';
 
 $slug = isset($_GET['slug']) ? (string) $_GET['slug'] : '';
 
@@ -36,6 +38,18 @@ $content = blog_wrap_tables((string) ($page['content'] ?? ''));
 $content = blog_demote_headings($content);
 [$toc_html, $content] = blog_build_toc($content);
 
+// ── Sidebar (giống trang bài viết): mặc định bật, có thể tắt bằng setting sidebar_enabled ──
+$sb_cfg  = sidebar_resolve('default', 'default');
+$sb_html = '';
+if ($sb_cfg['enabled']) {
+    $sb_html = sidebar_render($pdo);
+    if (function_exists('render_ad_slot')) {
+        $sb_html = render_ad_slot($pdo, 'post_sidebar') . $sb_html;
+    }
+}
+$has_sidebar = $sb_cfg['enabled'] && trim($sb_html) !== '';
+$sb_left = $has_sidebar && $sb_cfg['position'] === 'left';
+
 $site_name = get_setting('site_name', 'Thắng Digital Marketing');
 $seo = new SEO($site_name, BASE_URL);
 $seo->setTitle($page['meta_title'] ?: $page['title'])
@@ -58,8 +72,8 @@ require_once 'includes/header.php';
             </ol>
         </nav>
 
-        <div class="row justify-content-center">
-            <div class="col-lg-9">
+        <div class="row g-5<?php echo $has_sidebar ? '' : ' justify-content-center'; ?>">
+            <div class="<?php echo $has_sidebar ? 'col-lg-9' : 'col-12'; ?><?php echo $sb_left ? ' order-lg-2' : ''; ?>">
                 <article>
                     <header class="mb-4">
                         <h1 class="single-title"><?php echo e($page['title']); ?></h1>
@@ -70,6 +84,14 @@ require_once 'includes/header.php';
                     </div>
                 </article>
             </div>
+
+            <?php if ($has_sidebar): ?>
+            <aside class="col-lg-3<?php echo $sb_left ? ' order-lg-1' : ''; ?>">
+                <div class="blog-sidebar sticky-lg-top">
+                    <?php echo $sb_html; ?>
+                </div>
+            </aside>
+            <?php endif; ?>
         </div>
     </div>
 </div>

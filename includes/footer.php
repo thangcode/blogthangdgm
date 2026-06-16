@@ -432,7 +432,6 @@ $needs_locations_js = !empty($GLOBALS['require_locations_js']);
         z-index: 9999;
         pointer-events: none;
         touch-action: none;
-        display: none !important; /* Tạm ẩn widget liên hệ theo yêu cầu */
     }
 
     .back-to-top {

@@ -423,6 +423,24 @@ require_once '../includes/header.php';
                                 placeholder="VD: script chạy cuối trang..." spellcheck="false"><?php echo e($settings['custom_script_footer'] ?? ''); ?></textarea>
                             <div class="form-text">Chèn trước <code>&lt;/body&gt;</code> ở cuối trang.</div>
                         </div>
+
+                        <hr class="my-4">
+                        <h6 class="fw-bold mb-1"><i class="bi bi-cursor me-1"></i>Tên sự kiện nút liên hệ (GTM dataLayer)</h6>
+                        <p class="form-text mt-0 mb-3">Tên sự kiện đẩy vào GTM khi khách bấm nút liên hệ nổi (gọi/Zalo/Messenger). Dùng đúng tên này để tạo Trigger "Custom Event" trong GTM. Xem chi tiết tại <a href="<?php echo BASE_URL; ?>admin/conversions/index.php">Thống kê chuyển đổi</a>.</p>
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <label class="form-label">Sự kiện Gọi hotline</label>
+                                <input type="text" class="form-control" name="settings[gtm_event_hotline]" value="<?php echo e($settings['gtm_event_hotline'] ?? 'click_hotline'); ?>" placeholder="click_hotline">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Sự kiện Chat Zalo</label>
+                                <input type="text" class="form-control" name="settings[gtm_event_zalo]" value="<?php echo e($settings['gtm_event_zalo'] ?? 'click_zalo'); ?>" placeholder="click_zalo">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Sự kiện Messenger</label>
+                                <input type="text" class="form-control" name="settings[gtm_event_messenger]" value="<?php echo e($settings['gtm_event_messenger'] ?? 'click_messenger'); ?>" placeholder="click_messenger">
+                            </div>
+                        </div>
                     </div>
                     <div class="tab-pane fade <?php echo $active_tab === 'general' ? 'show active' : ''; ?>"
                         id="general" role="tabpanel">

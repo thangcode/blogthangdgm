@@ -70,6 +70,13 @@ try {
     $loadError = $e->getMessage();
 }
 
+// Tên sự kiện GTM cho các nút liên hệ (để gợi ý cách cấu hình trigger trong GTM)
+$contactEvents = [
+    ['label' => 'Gọi hotline', 'event' => get_setting('gtm_event_hotline', 'click_hotline'), 'log_type' => 'contact_hotline', 'icon' => 'bi-telephone-fill', 'color' => '#16a34a'],
+    ['label' => 'Chat Zalo', 'event' => get_setting('gtm_event_zalo', 'click_zalo'), 'log_type' => 'contact_zalo', 'icon' => 'bi-chat-dots-fill', 'color' => '#2563eb'],
+    ['label' => 'Messenger', 'event' => get_setting('gtm_event_messenger', 'click_messenger'), 'log_type' => 'contact_messenger', 'icon' => 'bi-messenger', 'color' => '#7c3aed'],
+];
+
 require_once '../includes/header.php';
 ?>
 
@@ -92,6 +99,30 @@ require_once '../includes/header.php';
         <div class="small">
             Đo lường kết hợp: form gửi đi → <code>log_conversion()</code> (server) và click nút liên hệ → <code>api/log-contact.php</code>; đồng thời đẩy sự kiện vào Google Tag Manager.
             Quản lý mã GTM/GA/Pixel tại <a href="<?php echo BASE_URL; ?>admin/settings/index.php?tab=tracking">Cấu hình → Mã chèn / Tracking</a>.
+        </div>
+    </div>
+
+    <div class="card shadow-sm mb-4 border-primary-subtle">
+        <div class="card-header bg-white fw-bold d-flex align-items-center gap-2">
+            <i class="bi bi-cursor-fill text-primary"></i> Tên sự kiện nút liên hệ (cấu hình trigger trong GTM)
+        </div>
+        <div class="card-body">
+            <p class="small text-muted mb-3">Khi khách bấm nút liên hệ nổi và xác nhận, hệ thống đẩy sự kiện sau vào <code>dataLayer</code> của Google Tag Manager. Hãy tạo <b>Trigger → Custom Event</b> trong GTM với đúng <b>tên sự kiện</b> bên dưới để kích hoạt tag (GA4/Ads conversion).</p>
+            <div class="table-responsive">
+                <table class="table table-sm align-middle mb-2">
+                    <thead class="table-light"><tr><th>Nút</th><th>Tên sự kiện GTM (event)</th><th>Loại lưu trong DB</th></tr></thead>
+                    <tbody>
+                        <?php foreach ($contactEvents as $ce): ?>
+                            <tr>
+                                <td><i class="bi <?php echo e($ce['icon']); ?> me-1" style="color:<?php echo e($ce['color']); ?>"></i><?php echo e($ce['label']); ?></td>
+                                <td><code class="user-select-all"><?php echo e($ce['event']); ?></code></td>
+                                <td><span class="badge bg-light text-dark border"><?php echo e($ce['log_type']); ?></span></td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+            <div class="form-text">Đổi tên các sự kiện này tại <a href="<?php echo BASE_URL; ?>admin/settings/index.php?tab=tracking">Cấu hình → Mã chèn / Tracking</a> (mục "Tên sự kiện nút liên hệ"). Ngoài ra mọi click vẫn được lưu vào bảng chuyển đổi theo "Loại lưu trong DB" dù bạn chưa cấu hình GTM.</div>
         </div>
     </div>
 

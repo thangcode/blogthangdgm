@@ -169,28 +169,47 @@ class BackupManager
         $source = realpath($source);
 
         if (is_dir($source)) {
-            $files = new RecursiveIteratorIterator(
-                new RecursiveDirectoryIterator($source, RecursiveDirectoryIterator::SKIP_DOTS),
-                RecursiveIteratorIterator::SELF_FIRST
-            );
+            // Khi domain chính đặt tại public_html, các domain khác là thư mục con CÙNG CẤP.
+            // Cắt nhánh: KHÔNG quét vào thư mục addon-domain (tên có dấu chấm) hoặc thư mục hệ thống hosting,
+            // để backup chỉ gói mã nguồn blog, không nuốt website khác (tránh file khổng lồ / tràn bộ nhớ).
+            $sourceNorm = str_replace('\\', '/', $source);
+            $systemDirs = ['backups', 'node_modules', '.git', 'cgi-bin', '.well-known', '.trash', 'ssl', 'mail', 'tmp', 'logs', '.cpanel', '.htpasswds', 'perl', 'php', 'etc', '.ssh'];
+            $shouldSkipTop = function ($name) use ($systemDirs) {
+                if (in_array(strtolower($name), $systemDirs, true)) {
+                    return true;
+                }
+                // Thư mục dạng domain (kết thúc bằng TLD): shop.thang-dgm.com, chiencuuho.com,
+                // fpt5s.vn, googleads.io.vn ... — loại để không backup nhầm website khác.
+                return (bool) preg_match('/\.(com|net|org|info|biz|co|io|vn|me|tv|asia|id|xyz|online|site|store|shop|app|dev|edu|gov|us|uk|jp|cn|in|de|fr|ru|club|pro|name|mobi)(\.[a-z]{2,})?$/i', $name);
+            };
+
+            $dirIterator = new RecursiveDirectoryIterator($source, RecursiveDirectoryIterator::SKIP_DOTS);
+            $filter = new RecursiveCallbackFilterIterator($dirIterator, function ($current) use ($sourceNorm, $shouldSkipTop) {
+                $path = str_replace('\\', '/', $current->getPathname());
+                $rel = ltrim(substr($path, strlen($sourceNorm)), '/');
+                $isTopLevel = (strpos($rel, '/') === false);
+                // Chỉ cắt nhánh ở CẤP 1 và chỉ với THƯ MỤC (giữ nguyên file gốc cấp 1 như .htaccess, index.php).
+                if ($isTopLevel && $current->isDir() && $shouldSkipTop($current->getFilename())) {
+                    return false;
+                }
+                return true;
+            });
+            $files = new RecursiveIteratorIterator($filter, RecursiveIteratorIterator::SELF_FIRST);
 
             foreach ($files as $file) {
-                $file = realpath($file);
-                $relativePath = substr($file, strlen($source) + 1);
+                $real = realpath($file->getPathname());
+                if ($real === false) {
+                    continue;
+                }
+                $relativePath = substr($real, strlen($source) + 1);
+                if ($relativePath === '') {
+                    continue;
+                }
 
-                // Exclude some directories
-                if (strpos($relativePath, 'backups') === 0)
-                    continue;
-                if (strpos($relativePath, 'node_modules') === 0)
-                    continue;
-                if (strpos($relativePath, '.git') === 0)
-                    continue;
-
-                if (is_dir($file)) {
+                if ($file->isDir()) {
                     $zip->addEmptyDir($relativePath);
-                } else if (is_file($file)) {
-                    $zip->addFile($file, $relativePath);
-
+                } else if ($file->isFile()) {
+                    $zip->addFile($real, $relativePath);
                     // Apply encryption if password is set
                     if ($password) {
                         $zip->setEncryptionName($relativePath, ZipArchive::EM_AES_256, $password);

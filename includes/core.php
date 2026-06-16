@@ -82,6 +82,15 @@ function get_setting($key, $default = '')
 
     // 2. Logic gốc của hàm
     global $pdo;
+
+    // Cache trong phạm vi request: mỗi setting_key chỉ truy vấn DB 1 lần.
+    // Lưu giá trị thật từ DB (kể cả khi không tồn tại -> đánh dấu MISS) để các
+    // lần gọi sau không lặp lại query. $default áp dụng lúc trả, không cache theo default.
+    static $cache = [];
+    if (array_key_exists($key, $cache)) {
+        return $cache[$key] !== false ? $cache[$key] : $default;
+    }
+
     try {
         // Đảm bảo kết nối DB đã có
         if (!isset($pdo)) {
@@ -91,6 +100,7 @@ function get_setting($key, $default = '')
         $stmt = $pdo->prepare("SELECT setting_value FROM settings WHERE setting_key = ?");
         $stmt->execute([$key]);
         $result = $stmt->fetchColumn();
+        $cache[$key] = $result;
         return $result !== false ? $result : $default;
     } catch (PDOException $e) {
         return $default;

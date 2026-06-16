@@ -131,31 +131,36 @@ if (!function_exists('render_header_menu')) {
     {
         foreach ($items as $item) {
             $hasChildren = !empty($item['children']);
-            $url = normalize_menu_url($item['url'] ?? '');
+            $rawUrl = trim((string) ($item['url'] ?? ''));
+            $url = normalize_menu_url($rawUrl);
             $name = e($item['name'] ?? 'Menu');
             $isActive = !empty($item['is_active']) || !empty($item['has_active_child']);
             $activeClass = $isActive ? ' active' : '';
             $ariaCurrent = $isActive ? ' aria-current="page"' : '';
+            $linkTargetAttrs = !empty($item['target_blank']) ? ' target="_blank" rel="noopener noreferrer"' : '';
             // Trang chủ -> hiển thị icon home (giữ chữ cho mobile + screen reader).
             // So theo path (bỏ qua domain) để đúng trên mọi môi trường (local/prod/đổi domain).
             $home_mpath = trim((string) parse_url($url, PHP_URL_PATH), '/');
             $home_basepath = trim((string) parse_url(BASE_URL, PHP_URL_PATH), '/');
+            $home_basehost = strtolower((string) parse_url(BASE_URL, PHP_URL_HOST));
+            $home_mhost = strtolower((string) parse_url($url, PHP_URL_HOST));
+            $isExternalMenu = ($home_mhost !== '' && $home_basehost !== '' && $home_mhost !== $home_basehost);
             if ($home_basepath !== '' && $home_mpath === $home_basepath) {
                 $home_mpath = '';
             }
-            $isHome = ($url === '' || $url === '/' || $home_mpath === '' || $home_mpath === 'index.php');
+            $isHome = (!$isExternalMenu && $rawUrl !== '' && $rawUrl !== '#' && ($url === '/' || $home_mpath === '' || $home_mpath === 'index.php'));
 
             if ($hasChildren) {
                 if ($level === 0) {
                     echo '<li class="nav-item dropdown">';
-                    echo '<a class="nav-link dropdown-toggle' . $activeClass . '" href="' . e($url) . '" role="button" data-bs-toggle="dropdown" aria-expanded="false"' . $ariaCurrent . '>' . $name . '</a>';
+                    echo '<a class="nav-link dropdown-toggle' . $activeClass . '" href="' . e($url) . '" role="button" data-bs-toggle="dropdown" aria-expanded="false"' . $ariaCurrent . $linkTargetAttrs . '>' . $name . '</a>';
                     echo '<ul class="dropdown-menu">';
                     render_header_menu($item['children'], $level + 1);
                     echo '</ul>';
                     echo '</li>';
                 } else {
                     echo '<li class="dropdown-submenu">';
-                    echo '<a class="dropdown-item dropdown-toggle' . $activeClass . '" href="' . e($url) . '"' . $ariaCurrent . '>' . $name . '</a>';
+                    echo '<a class="dropdown-item dropdown-toggle' . $activeClass . '" href="' . e($url) . '"' . $ariaCurrent . $linkTargetAttrs . '>' . $name . '</a>';
                     echo '<ul class="dropdown-menu">';
                     render_header_menu($item['children'], $level + 1);
                     echo '</ul>';
@@ -165,13 +170,13 @@ if (!function_exists('render_header_menu')) {
                 if ($level === 0) {
                     echo '<li class="nav-item">';
                     if ($isHome) {
-                        echo '<a class="nav-link nav-home-link' . $activeClass . '" href="' . e($url) . '"' . $ariaCurrent . ' aria-label="' . $name . '" title="' . $name . '"><i class="bi bi-house-door-fill"></i><span class="nav-home-text d-lg-none ms-2">' . $name . '</span></a>';
+                        echo '<a class="nav-link nav-home-link' . $activeClass . '" href="' . e($url) . '"' . $ariaCurrent . $linkTargetAttrs . ' aria-label="' . $name . '" title="' . $name . '"><i class="bi bi-house-door-fill"></i><span class="nav-home-text d-lg-none ms-2">' . $name . '</span></a>';
                     } else {
-                        echo '<a class="nav-link' . $activeClass . '" href="' . e($url) . '"' . $ariaCurrent . '>' . $name . '</a>';
+                        echo '<a class="nav-link' . $activeClass . '" href="' . e($url) . '"' . $ariaCurrent . $linkTargetAttrs . '>' . $name . '</a>';
                     }
                     echo '</li>';
                 } else {
-                    echo '<li><a class="dropdown-item' . $activeClass . '" href="' . e($url) . '"' . $ariaCurrent . '>' . $name . '</a></li>';
+                    echo '<li><a class="dropdown-item' . $activeClass . '" href="' . e($url) . '"' . $ariaCurrent . $linkTargetAttrs . '>' . $name . '</a></li>';
                 }
             }
         }

@@ -1,5 +1,8 @@
 <?php
 // 404.php - Premium Error Page
+if (!headers_sent()) {
+    http_response_code(404);
+}
 require_once 'config/config.php';
 require_once 'config/database.php';
 require_once 'includes/functions.php';

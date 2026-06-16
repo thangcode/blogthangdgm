@@ -18,7 +18,7 @@ Disallow: /*.sql$
 Disallow: /*.log$
 
 # Sitemap
-Sitemap: https://thang-dgm.com/sitemap.xml
+Sitemap: https://www.thang-dgm.com/sitemap.xml
 
 # Tài nguyên cho AI engines (GEO)
 # llms.txt: https://thang-dgm.com/llms.txt

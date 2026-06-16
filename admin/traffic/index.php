@@ -182,6 +182,31 @@ $whereBotSessions = implode(' AND ', $botSessionConditions);
 $humanEventConditions = array_merge($eventConditions, ["session_key IN (SELECT session_key FROM traffic_sessions WHERE NOT {$botDetectionSql})"]);
 $humanEventParams = $eventParams;
 $whereHumanEvents = implode(' AND ', $humanEventConditions);
+$suspiciousConditions = ['s.started_at >= ?', 's.started_at < ?'];
+$suspiciousParams = [$dateFrom, $dateTo];
+if ($sourceType !== '') {
+    $suspiciousConditions[] = 's.source_type = ?';
+    $suspiciousParams[] = $sourceType;
+}
+if ($deviceType !== '') {
+    $suspiciousConditions[] = 's.device_type = ?';
+    $suspiciousParams[] = $deviceType;
+}
+if ($utmCampaign !== '') {
+    $suspiciousConditions[] = 's.utm_campaign = ?';
+    $suspiciousParams[] = $utmCampaign;
+}
+if ($ipFilter !== '') {
+    $suspiciousConditions[] = 's.ip_address LIKE ?';
+    $suspiciousParams[] = '%' . $ipFilter . '%';
+}
+if ($pathFilter !== '') {
+    $suspiciousConditions[] = '(s.landing_path LIKE ? OR s.exit_path LIKE ? OR s.session_key IN (SELECT DISTINCT session_key FROM traffic_pageviews WHERE page_path LIKE ?))';
+    $suspiciousParams[] = '%' . $pathFilter . '%';
+    $suspiciousParams[] = '%' . $pathFilter . '%';
+    $suspiciousParams[] = '%' . $pathFilter . '%';
+}
+$whereSuspiciousSessions = implode(' AND ', $suspiciousConditions);
 
 $summary = traffic_fetch_one(
      $pdo,
@@ -347,15 +372,82 @@ if (!empty($recentSessionKeys)) {
     }
 }
 
-$blockedIpRows = traffic_fetch_all($pdo, "SELECT ip_address, block_reason, blocked_by, attempts_count, last_attempt_at, created_at, updated_at FROM traffic_blocked_ips ORDER BY updated_at DESC, created_at DESC");
+$blockedIpConditions = ['(created_at < ? AND (last_attempt_at IS NULL OR last_attempt_at >= ? OR updated_at >= ?))'];
+$blockedIpParams = [$dateTo, $dateFrom, $dateFrom];
+if ($ipFilter !== '') {
+    $blockedIpConditions[] = 'ip_address LIKE ?';
+    $blockedIpParams[] = '%' . $ipFilter . '%';
+}
+$whereBlockedIps = implode(' AND ', $blockedIpConditions);
+$blockedIpRows = traffic_fetch_all(
+    $pdo,
+    "SELECT ip_address, block_reason, blocked_by, attempts_count, last_attempt_at, created_at, updated_at
+     FROM traffic_blocked_ips
+     WHERE {$whereBlockedIps}
+     ORDER BY updated_at DESC, created_at DESC",
+    $blockedIpParams
+);
+$allBlockedIpRows = traffic_fetch_all($pdo, "SELECT ip_address, block_reason, blocked_by, attempts_count, last_attempt_at, created_at, updated_at FROM traffic_blocked_ips ORDER BY updated_at DESC, created_at DESC");
 $blockedIpMap = [];
-foreach ($blockedIpRows as $blockedIpRow) {
+foreach ($allBlockedIpRows as $blockedIpRow) {
     $blockedIpMap[(string) ($blockedIpRow['ip_address'] ?? '')] = $blockedIpRow;
 }
 
 $fwSettings = function_exists('security_fw_settings')
     ? security_fw_settings($pdo)
     : ['enabled' => false, 'block_bad_ua' => false, 'autoban_enabled' => false, 'autoban_threshold' => 240, 'autoban_window' => 60, 'autoban_duration' => 3600, 'whitelist_ips' => '', 'bad_ua_extra' => ''];
+if (function_exists('security_fw_ensure_storage')) {
+    security_fw_ensure_storage($pdo);
+}
+$suspiciousPageviewThreshold = 30;
+$securityRateThreshold = max(1, (int) floor(((int) ($fwSettings['autoban_threshold'] ?? 240)) * 0.5));
+$securityRateWindow = max(1, (int) ($fwSettings['autoban_window'] ?? 60));
+$securityRateConditions = ['bucket >= ?', 'bucket < ?'];
+$securityRateParams = [
+    (int) floor($dateFromTs / $securityRateWindow),
+    (int) ceil($dateToTs / $securityRateWindow),
+];
+if ($ipFilter !== '') {
+    $securityRateConditions[] = 'ip_address LIKE ?';
+    $securityRateParams[] = '%' . $ipFilter . '%';
+}
+$whereSecurityRate = implode(' AND ', $securityRateConditions);
+$suspiciousRows = traffic_fetch_all(
+    $pdo,
+    "SELECT s.ip_address,
+            COUNT(*) AS total_sessions,
+            COALESCE(SUM(s.pageviews_count), 0) AS total_pageviews,
+            MIN(s.started_at) AS first_seen,
+            MAX(s.last_activity_at) AS last_seen,
+            MAX(s.source_name) AS source_name,
+            MAX(s.source_host) AS source_host,
+            MAX(s.browser_name) AS browser_name,
+            MAX(s.os_name) AS os_name,
+            MAX(s.isp_name) AS isp_name,
+            MAX(s.user_agent) AS user_agent,
+            MAX(CASE WHEN b.ip_address IS NOT NULL THEN 1 ELSE 0 END) AS is_blocked,
+            MAX(CASE WHEN s.is_bot = 1 THEN 1 ELSE 0 END) AS is_bot,
+            MAX(CASE WHEN s.pageviews_count >= ? THEN 1 ELSE 0 END) AS is_high_pageviews
+     FROM traffic_sessions s
+     LEFT JOIN traffic_blocked_ips b ON b.ip_address = s.ip_address
+     WHERE {$whereSuspiciousSessions}
+       AND (s.is_bot = 1 OR b.ip_address IS NOT NULL OR s.pageviews_count >= ?)
+     GROUP BY s.ip_address
+     ORDER BY is_blocked DESC, is_high_pageviews DESC, total_pageviews DESC, last_seen DESC
+     LIMIT 30",
+    array_merge([$suspiciousPageviewThreshold], $suspiciousParams, [$suspiciousPageviewThreshold])
+);
+$securityRateRows = traffic_fetch_all(
+    $pdo,
+    "SELECT ip_address, SUM(hits) AS total_hits, MAX(bucket) AS last_bucket
+     FROM security_fw_rate
+     WHERE {$whereSecurityRate}
+     GROUP BY ip_address
+     HAVING SUM(hits) >= ?
+     ORDER BY total_hits DESC, last_bucket DESC
+     LIMIT 20",
+    array_merge($securityRateParams, [$securityRateThreshold])
+);
 
 function traffic_split_pageviews_by_gap(array $pageviews, int $gapSeconds = 600): array
 {
@@ -473,7 +565,6 @@ $deviceOptions = traffic_fetch_all($pdo, "SELECT DISTINCT device_type FROM traff
 $utmCampaignOptions = traffic_fetch_all($pdo, "SELECT DISTINCT utm_campaign FROM traffic_sessions WHERE utm_campaign IS NOT NULL AND utm_campaign <> '' AND is_bot = 0 ORDER BY utm_campaign ASC");
 $campaignRows = traffic_fetch_all($pdo, "SELECT utm_source, utm_medium, utm_campaign, COUNT(*) AS total_sessions, COALESCE(SUM(pageviews_count), 0) AS total_pageviews FROM traffic_sessions WHERE {$whereHumanSessions} AND (utm_source <> '' OR utm_medium <> '' OR utm_campaign <> '') GROUP BY utm_source, utm_medium, utm_campaign ORDER BY total_sessions DESC, total_pageviews DESC LIMIT 15", $humanSessionParams);
 $botSummary = traffic_fetch_one($pdo, "SELECT COUNT(*) AS bot_sessions, COUNT(DISTINCT ip_address) AS bot_ips FROM traffic_sessions WHERE {$whereBotSessions}", $botSessionParams);
-$botRows = traffic_fetch_all($pdo, "SELECT ip_address, source_name, source_host, browser_name, os_name, isp_name, COUNT(*) AS total_sessions, MIN(started_at) AS first_seen, MAX(last_activity_at) AS last_seen FROM traffic_sessions WHERE {$whereBotSessions} GROUP BY ip_address, source_name, source_host, browser_name, os_name, isp_name ORDER BY total_sessions DESC, last_seen DESC LIMIT 20", $botSessionParams);
 $activeFilters = [];
 if ($sourceType !== '') { $activeFilters[] = 'Nguồn: ' . $sourceType; }
 if ($deviceType !== '') { $activeFilters[] = 'Thiết bị: ' . $deviceType; }
@@ -494,22 +585,19 @@ $trafficFilterBase = [
 ];
 $recentTrafficQuery = $trafficFilterBase;
 $conversionQuery = $trafficFilterBase;
-$botQuery = $trafficFilterBase;
 $recentTrafficPage = max(1, (int) ($_GET['recent_page'] ?? 1));
 $conversionPage = max(1, (int) ($_GET['conversion_page'] ?? 1));
-$botPage = max(1, (int) ($_GET['bot_page'] ?? 1));
 $recentTrafficPagination = traffic_paginate_array(array_values($recentGroupedRows), 10, $recentTrafficPage);
 $recentGroupedRows = $recentTrafficPagination['items'];
 $recentConversionPagination = traffic_paginate_array($recentConversionRows, 10, $conversionPage);
 $recentConversionRows = $recentConversionPagination['items'];
-$botPagination = traffic_paginate_array($botRows, 10, $botPage);
-$botRows = $botPagination['items'];
 $pageviewsPerSession = (int) ($summary['sessions'] ?? 0) > 0 ? round(((int) ($summary['pageviews'] ?? 0)) / max(1, (int) ($summary['sessions'] ?? 0)), 1) : 0;
 ?>
 <style>
 .traffic-card,.traffic-table-card,.traffic-filter-card{border:1px solid #e5e7eb;border-radius:18px;background:#fff;box-shadow:0 10px 24px rgba(15,23,42,.05)}
 .traffic-card{padding:12px 14px;min-height:88px;height:100%}.traffic-card-label{color:#6b7280;font-size:11px;text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px}.traffic-card-value{color:#111827;font-size:22px;font-weight:700;line-height:1}.traffic-card-note,.traffic-small{color:#64748b;font-size:12px}.traffic-chart-wrap{min-height:150px;position:relative}.traffic-chart-card{padding:12px !important}.traffic-chart-card h5{margin-bottom:8px !important;font-size:16px}.traffic-table-card .table{margin-bottom:0}.badge-soft{display:inline-flex;align-items:center;padding:4px 10px;border-radius:999px;background:#eef2ff;color:#4338ca;font-size:12px;font-weight:600}
 .badge-soft.badge-danger-soft{background:#fee2e2;color:#b91c1c}
+.badge-soft.badge-warning-soft{background:#fef3c7;color:#92400e}
 .traffic-ip-form{display:flex;gap:12px;flex-wrap:wrap;align-items:end}
 .traffic-ip-form .form-group{flex:1 1 220px}
 .traffic-inline-form{display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap}
@@ -564,10 +652,15 @@ $pageviewsPerSession = (int) ($summary['sessions'] ?? 0) > 0 ? round(((int) ($su
 @media (max-width: 575px){.traffic-funnel{grid-template-columns:1fr}.traffic-summary-grid{grid-template-columns:1fr}}
 </style>
 <div class="content-wrapper">
-<div class="page-header"><div><h1 class="page-title">Lưu lượng truy cập</h1><p class="page-subtitle">Theo dõi nguồn truy cập, thiết bị, vị trí, ISP và hành vi của khách truy cập.</p></div></div>
+<div class="page-header"><div><h1 class="page-title">Truy cập & Bảo mật</h1><p class="page-subtitle">Theo dõi nguồn truy cập, thiết bị, vị trí, ISP, hành vi khách truy cập và cấu hình bảo mật / tường lửa.</p></div></div>
 <?php if (!empty($trafficFlash) && is_array($trafficFlash)): ?>
 <div class="alert alert-<?php echo htmlspecialchars($trafficFlash['type'] ?? 'info'); ?> border-0 shadow-sm mb-4"><?php echo htmlspecialchars($trafficFlash['message'] ?? ''); ?></div>
 <?php endif; ?>
+<div class="traffic-tabs">
+<button type="button" class="traffic-tab-btn active" data-traffic-tab="overview">Truy cập</button>
+<button type="button" class="traffic-tab-btn" data-traffic-tab="security">Bảo mật &amp; tường lửa</button>
+</div>
+<div class="traffic-tab-pane active" data-traffic-tab-pane="overview">
 <div class="card border-0 mb-4 traffic-filter-card"><div class="card-body p-4"><form method="GET" class="row g-3 align-items-end">
 <div class="col-12"><div class="traffic-filter-top"><?php foreach ($periodOptions as $periodKey => $periodData): $periodQuery = $trafficFilterBase; $periodQuery['period'] = $periodKey; if ($periodKey !== 'custom') { unset($periodQuery['days']); } ?><a class="traffic-filter-chip <?php echo $period === $periodKey ? 'active' : ''; ?>" href="index.php?<?php echo htmlspecialchars(http_build_query($periodQuery)); ?>"><?php echo htmlspecialchars($periodData['label']); ?></a><?php endforeach; ?></div></div>
 <input type="hidden" name="period" value="<?php echo htmlspecialchars($period); ?>">
@@ -583,33 +676,7 @@ $pageviewsPerSession = (int) ($summary['sessions'] ?? 0) > 0 ? round(((int) ($su
 <?php if (!empty($activeFilters)): ?>
 <div class="alert alert-info border-0 shadow-sm mb-4">Đang lọc theo: <?php echo htmlspecialchars(implode(' | ', $activeFilters)); ?></div>
 <?php endif; ?>
-<div class="traffic-table-card p-4 mb-4">
-<div class="traffic-section-head"><div><h5 class="mb-0">Tường lửa &amp; chống bot/flood</h5><div class="traffic-small mt-2">Tự động chặn user-agent xấu (scanner/scraper) và auto-ban IP khi vượt ngưỡng request. Các bot lớn hợp lệ (Googlebot, Bingbot, Facebook...) luôn được bỏ qua, không bao giờ bị chặn.</div></div><div class="traffic-section-meta"><?php echo $fwSettings['enabled'] ? 'Đang bật' : 'Đang tắt'; ?></div></div>
-<form method="POST" class="row g-3 mb-2">
-<input type="hidden" name="csrf_token" value="<?php echo e(generate_csrf_token()); ?>">
-<input type="hidden" name="traffic_action" value="save_firewall">
-<div class="col-md-4"><div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="fwEnabled" name="security_fw_enabled" <?php echo $fwSettings['enabled'] ? 'checked' : ''; ?>><label class="form-check-label" for="fwEnabled">Bật tường lửa</label></div></div>
-<div class="col-md-4"><div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="fwBadUa" name="security_fw_block_bad_ua" <?php echo $fwSettings['block_bad_ua'] ? 'checked' : ''; ?>><label class="form-check-label" for="fwBadUa">Chặn user-agent xấu</label></div></div>
-<div class="col-md-4"><div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="fwAutoban" name="security_fw_autoban_enabled" <?php echo $fwSettings['autoban_enabled'] ? 'checked' : ''; ?>><label class="form-check-label" for="fwAutoban">Auto-ban theo ngưỡng request</label></div></div>
-<div class="col-md-4"><label class="form-label">Ngưỡng request</label><input type="number" min="10" name="security_fw_autoban_threshold" class="form-control" value="<?php echo (int) $fwSettings['autoban_threshold']; ?>"><div class="traffic-small mt-1">Số request tối đa trong 1 khung thời gian.</div></div>
-<div class="col-md-4"><label class="form-label">Khung thời gian (giây)</label><input type="number" min="5" name="security_fw_autoban_window" class="form-control" value="<?php echo (int) $fwSettings['autoban_window']; ?>"></div>
-<div class="col-md-4"><label class="form-label">Thời gian ban (giây)</label><input type="number" min="60" name="security_fw_autoban_duration" class="form-control" value="<?php echo (int) $fwSettings['autoban_duration']; ?>"><div class="traffic-small mt-1">Hết hạn sẽ tự mở chặn.</div></div>
-<div class="col-md-6"><label class="form-label">Whitelist IP / CIDR (mỗi dòng 1 mục)</label><textarea name="security_fw_whitelist_ips" class="form-control" rows="3" placeholder="Ví dụ:&#10;123.123.123.123&#10;203.0.113.0/24"><?php echo e($fwSettings['whitelist_ips']); ?></textarea><div class="traffic-small mt-1">IP của bạn / monitoring nên thêm vào đây để không bao giờ bị ban.</div></div>
-<div class="col-md-6"><label class="form-label">User-agent xấu bổ sung (mỗi dòng 1 chuỗi)</label><textarea name="security_fw_bad_ua_extra" class="form-control" rows="3" placeholder="Ví dụ:&#10;BadBot&#10;EvilScraper"><?php echo e($fwSettings['bad_ua_extra']); ?></textarea><div class="traffic-small mt-1">Khớp dạng chứa chuỗi, không phân biệt hoa thường.</div></div>
-<div class="col-12"><button type="submit" class="btn btn-primary">Lưu cấu hình tường lửa</button></div>
-</form>
-</div>
-<div class="traffic-table-card p-4 mb-4">
-<div class="traffic-section-head"><div><h5 class="mb-0">Chặn IP truy cập website</h5><div class="traffic-small mt-2">IP bị chặn sẽ không truy cập được trang ngoài website và các API public liên quan.</div></div><div class="traffic-section-meta"><?php echo number_format(count($blockedIpRows)); ?> IP đang bị chặn</div></div>
-<form method="POST" class="traffic-ip-form mb-3">
-<input type="hidden" name="csrf_token" value="<?php echo e(generate_csrf_token()); ?>">
-<input type="hidden" name="traffic_action" value="block_ip">
-<div class="form-group"><label class="form-label">IP cần chặn</label><input type="text" name="ip_address" class="form-control" placeholder="Ví dụ: 123.123.123.123" required></div>
-<div class="form-group"><label class="form-label">Ghi chú</label><input type="text" name="block_reason" class="form-control" placeholder="Lý do chặn, ví dụ spam hoặc quét bot"></div>
-<div><button type="submit" class="btn btn-danger">Chặn IP</button></div>
-</form>
-<div class="table-responsive"><table class="table align-middle"><thead><tr><th>IP</th><th>Ghi chú</th><th>Người chặn</th><th class="text-end">Lượt chặn</th><th>Lần gần nhất</th><th>Thời gian</th><th class="text-end">Thao tác</th></tr></thead><tbody><?php if ($blockedIpRows): foreach ($blockedIpRows as $blockedRow): ?><tr><td><span class="badge-soft badge-danger-soft"><?php echo htmlspecialchars($blockedRow['ip_address']); ?></span></td><td><?php echo htmlspecialchars($blockedRow['block_reason'] ?: '-'); ?></td><td><?php echo htmlspecialchars($blockedRow['blocked_by'] ?: '-'); ?></td><td class="text-end fw-semibold"><?php echo number_format((int) ($blockedRow['attempts_count'] ?? 0)); ?></td><td><?php echo htmlspecialchars($blockedRow['last_attempt_at'] ?: '-'); ?></td><td><?php echo htmlspecialchars($blockedRow['created_at']); ?></td><td class="text-end"><form method="POST" class="traffic-inline-form justify-content-end"><input type="hidden" name="csrf_token" value="<?php echo e(generate_csrf_token()); ?>"><input type="hidden" name="traffic_action" value="unblock_ip"><input type="hidden" name="ip_address" value="<?php echo htmlspecialchars($blockedRow['ip_address']); ?>"><button type="submit" class="btn btn-outline-secondary btn-sm">Bỏ chặn</button></form></td></tr><?php endforeach; else: ?><tr><td colspan="7" class="text-center text-muted py-4">Chưa có IP nào bị chặn.</td></tr><?php endif; ?></tbody></table></div>
-</div>
+
 <div class="traffic-summary-grid mb-4">
 <div class="traffic-card"><div class="traffic-card-label">Sessions</div><div class="traffic-card-value"><?php echo number_format((int) ($summary['sessions'] ?? 0)); ?></div><div class="traffic-card-note">Visitors <?php echo number_format((int) ($summary['visitors'] ?? 0)); ?> | Khách mới <?php echo number_format((int) ($summary['new_visitors'] ?? 0)); ?></div></div>
 <div class="traffic-card"><div class="traffic-card-label">Pageviews</div><div class="traffic-card-value"><?php echo number_format((int) ($summary['pageviews'] ?? 0)); ?></div><div class="traffic-card-note"><?php echo number_format((float) $pageviewsPerSession, 1); ?> trang / session</div></div>
@@ -674,12 +741,6 @@ echo $bounceRate; ?>%</td><td class="text-end text-muted">—</td></tr>
 <div class="traffic-table-card p-4 mb-4"><div class="traffic-section-head"><h5 class="mb-0">Chuyển đổi gần đây</h5><div class="traffic-section-meta"><?php echo number_format((int) ($recentConversionPagination['total_items'] ?? 0)); ?> mục</div></div><div class="table-responsive"><table class="table align-middle"><thead><tr><th>Loại</th><th>Nguồn / Campaign</th><th>Trang</th><th>IP / Hành trình</th><th>Thời gian</th></tr></thead><tbody><?php if ($recentConversionRows): foreach ($recentConversionRows as $row): $journeyFilters = $trafficFilterBase; $journeyFilters['ip'] = $row['ip_address'] ?: $ipFilter; ?><tr><td><div class="fw-semibold"><?php echo e($row['type']); ?></div><div class="traffic-small"><?php echo e($row['source_type'] ?: '-'); ?></div></td><td><div><?php echo e(traffic_clean_tracking_value($row['source_name'] ?? '', 150) ?: '-'); ?></div><div class="traffic-small"><?php echo e(trim((traffic_clean_tracking_value($row['utm_source'] ?? '', 150) ?: '-') . ' / ' . (traffic_clean_tracking_value($row['utm_medium'] ?? '', 150) ?: '-') . ' / ' . (traffic_clean_tracking_value($row['utm_campaign'] ?? '', 150) ?: '-'))); ?></div></td><td class="traffic-small"><?php echo e($row['page_url'] ?: '-'); ?></td><td><div class="fw-semibold"><?php echo e($row['ip_address'] ?: '-'); ?></div><?php if (!empty($row['ip_address'])): ?><div class="traffic-small"><a href="index.php?<?php echo e(http_build_query($journeyFilters)); ?>#recent-traffic">Xem hành trình IP này</a></div><?php endif; ?></td><td><?php echo e($row['created_at']); ?></td></tr><?php endforeach; else: ?><tr><td colspan="5" class="text-center text-muted py-4">Chưa có chuyển đổi nào gần đây.</td></tr><?php endif; ?></tbody></table></div><?php traffic_render_pagination($recentConversionPagination, $conversionQuery, 'conversion_page'); ?></div>
 </div>
 </details>
-<details class="traffic-collapsible">
-<summary>Bot</summary>
-<div class="traffic-collapsible-body">
-<div class="traffic-table-card p-4 mb-4"><div class="traffic-section-head"><h5 class="mb-0">Bot lớn và dải IP quan sát được</h5><div class="traffic-section-meta"><?php echo number_format((int) ($botPagination['total_items'] ?? 0)); ?> mục</div></div><div class="table-responsive"><table class="table align-middle"><thead><tr><th>IP bot</th><th>Bot / nguồn</th><th>Browser / OS</th><th>ISP</th><th class="text-end">Sessions</th><th>First seen</th><th>Last seen</th></tr></thead><tbody><?php if ($botRows): foreach ($botRows as $row): ?><tr><td><span class="badge-soft"><?php echo htmlspecialchars($row['ip_address'] ?: '-'); ?></span></td><td><div class="fw-semibold"><?php echo htmlspecialchars($row['source_name'] ?: $row['source_host'] ?: 'Bot'); ?></div><div class="traffic-small"><?php echo htmlspecialchars($row['source_host'] ?: '-'); ?></div></td><td><div><?php echo htmlspecialchars($row['browser_name'] ?: 'Chưa rõ'); ?></div><div class="traffic-small"><?php echo htmlspecialchars($row['os_name'] ?: 'Chưa rõ'); ?></div></td><td><?php echo htmlspecialchars($row['isp_name'] ?: 'Chưa rõ'); ?></td><td class="text-end fw-semibold"><?php echo number_format((int) $row['total_sessions']); ?></td><td><?php echo htmlspecialchars($row['first_seen']); ?></td><td><?php echo htmlspecialchars($row['last_seen']); ?></td></tr><?php endforeach; else: ?><tr><td colspan="7" class="text-center text-muted py-4">Chưa ghi nhận bot nào trong bộ lọc hiện tại.</td></tr><?php endif; ?></tbody></table></div><?php traffic_render_pagination($botPagination, $botQuery, 'bot_page'); ?></div>
-</div>
-</details>
 <details class="traffic-collapsible" open>
 <summary>Hành trình truy cập</summary>
 <div class="traffic-collapsible-body">
@@ -687,6 +748,60 @@ echo $bounceRate; ?>%</td><td class="text-end text-muted">—</td></tr>
 </div>
 </details>
 </div>
+<div class="traffic-tab-pane" data-traffic-tab-pane="security">
+<div class="card border-0 mb-4 traffic-filter-card"><div class="card-body p-4"><form method="GET" action="index.php#security" class="row g-3 align-items-end">
+<div class="col-12"><div class="traffic-filter-top"><?php foreach ($periodOptions as $periodKey => $periodData): $periodQuery = $trafficFilterBase; $periodQuery['period'] = $periodKey; if ($periodKey !== 'custom') { unset($periodQuery['days']); } ?><a class="traffic-filter-chip <?php echo $period === $periodKey ? 'active' : ''; ?>" href="index.php?<?php echo htmlspecialchars(http_build_query($periodQuery)); ?>#security"><?php echo htmlspecialchars($periodData['label']); ?></a><?php endforeach; ?></div></div>
+<input type="hidden" name="period" value="<?php echo htmlspecialchars($period); ?>">
+<div class="col-md-2"><label class="form-label">Số ngày</label><select name="days" class="form-select" <?php echo $period !== 'custom' ? 'disabled' : ''; ?>><?php foreach ([3,7,14,30,60,90] as $option): ?><option value="<?php echo $option; ?>" <?php echo $days === $option ? 'selected' : ''; ?>><?php echo $option; ?> ngày</option><?php endforeach; ?></select><?php if ($period !== 'custom'): ?><input type="hidden" name="days" value="<?php echo $days; ?>"><?php endif; ?></div>
+<div class="col-md-2"><label class="form-label">Nguồn</label><select name="source_type" class="form-select"><option value="">Tất cả</option><?php foreach ($sourceOptions as $option): ?><option value="<?php echo htmlspecialchars($option['source_type']); ?>" <?php echo $sourceType === $option['source_type'] ? 'selected' : ''; ?>><?php echo htmlspecialchars($option['source_type']); ?></option><?php endforeach; ?></select></div>
+<div class="col-md-2"><label class="form-label">Thiết bị</label><select name="device_type" class="form-select"><option value="">Tất cả</option><?php foreach ($deviceOptions as $option): ?><option value="<?php echo htmlspecialchars($option['device_type']); ?>" <?php echo $deviceType === $option['device_type'] ? 'selected' : ''; ?>><?php echo htmlspecialchars($option['device_type']); ?></option><?php endforeach; ?></select></div>
+<div class="col-md-2"><label class="form-label">Campaign</label><select name="utm_campaign" class="form-select"><option value="">Tất cả</option><?php foreach ($utmCampaignOptions as $option): $cleanCampaignOption = traffic_clean_tracking_value($option['utm_campaign'] ?? '', 150); ?><option value="<?php echo e($cleanCampaignOption); ?>" <?php echo $utmCampaign === $cleanCampaignOption ? 'selected' : ''; ?>><?php echo e($cleanCampaignOption); ?></option><?php endforeach; ?></select></div>
+<div class="col-md-2"><label class="form-label">Đường dẫn</label><input type="text" name="path" class="form-control" value="<?php echo htmlspecialchars($pathFilter); ?>" placeholder="/san-pham"></div>
+<div class="col-md-2"><label class="form-label">IP</label><input type="text" name="ip" class="form-control" value="<?php echo htmlspecialchars($ipFilter); ?>" placeholder="123.45"></div>
+<div class="col-md-2 d-grid"><button type="submit" class="btn btn-primary">Áp dụng</button></div>
+<div class="col-12 d-flex gap-2 flex-wrap"><a href="index.php#security" class="btn btn-outline-secondary btn-sm">Đặt lại bộ lọc</a></div>
+</form></div></div>
+<?php if (!empty($activeFilters)): ?>
+<div class="alert alert-info border-0 shadow-sm mb-4">Đang lọc theo: <?php echo htmlspecialchars(implode(' | ', $activeFilters)); ?></div>
+<?php endif; ?>
+<div class="traffic-table-card p-4 mb-4">
+<div class="traffic-section-head"><div><h5 class="mb-0">Tường lửa &amp; chống bot/flood</h5><div class="traffic-small mt-2">Tự động chặn user-agent xấu (scanner/scraper) và auto-ban IP khi vượt ngưỡng request. Các bot lớn hợp lệ (Googlebot, Bingbot, Facebook...) luôn được bỏ qua, không bao giờ bị chặn.</div></div><div class="traffic-section-meta"><?php echo $fwSettings['enabled'] ? 'Đang bật' : 'Đang tắt'; ?></div></div>
+<form method="POST" class="row g-3 mb-2">
+<input type="hidden" name="csrf_token" value="<?php echo e(generate_csrf_token()); ?>">
+<input type="hidden" name="traffic_action" value="save_firewall">
+<div class="col-md-4"><div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="fwEnabled" name="security_fw_enabled" <?php echo $fwSettings['enabled'] ? 'checked' : ''; ?>><label class="form-check-label" for="fwEnabled">Bật tường lửa</label></div></div>
+<div class="col-md-4"><div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="fwBadUa" name="security_fw_block_bad_ua" <?php echo $fwSettings['block_bad_ua'] ? 'checked' : ''; ?>><label class="form-check-label" for="fwBadUa">Chặn user-agent xấu</label></div></div>
+<div class="col-md-4"><div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="fwAutoban" name="security_fw_autoban_enabled" <?php echo $fwSettings['autoban_enabled'] ? 'checked' : ''; ?>><label class="form-check-label" for="fwAutoban">Auto-ban theo ngưỡng request</label></div></div>
+<div class="col-md-4"><label class="form-label">Ngưỡng request</label><input type="number" min="10" name="security_fw_autoban_threshold" class="form-control" value="<?php echo (int) $fwSettings['autoban_threshold']; ?>"><div class="traffic-small mt-1">Số request tối đa trong 1 khung thời gian.</div></div>
+<div class="col-md-4"><label class="form-label">Khung thời gian (giây)</label><input type="number" min="5" name="security_fw_autoban_window" class="form-control" value="<?php echo (int) $fwSettings['autoban_window']; ?>"></div>
+<div class="col-md-4"><label class="form-label">Thời gian ban (giây)</label><input type="number" min="60" name="security_fw_autoban_duration" class="form-control" value="<?php echo (int) $fwSettings['autoban_duration']; ?>"><div class="traffic-small mt-1">Hết hạn sẽ tự mở chặn.</div></div>
+<div class="col-md-6"><label class="form-label">Whitelist IP / CIDR (mỗi dòng 1 mục)</label><textarea name="security_fw_whitelist_ips" class="form-control" rows="3" placeholder="Ví dụ:&#10;123.123.123.123&#10;203.0.113.0/24"><?php echo e($fwSettings['whitelist_ips']); ?></textarea><div class="traffic-small mt-1">IP của bạn / monitoring nên thêm vào đây để không bao giờ bị ban.</div></div>
+<div class="col-md-6"><label class="form-label">User-agent xấu bổ sung (mỗi dòng 1 chuỗi)</label><textarea name="security_fw_bad_ua_extra" class="form-control" rows="3" placeholder="Ví dụ:&#10;BadBot&#10;EvilScraper"><?php echo e($fwSettings['bad_ua_extra']); ?></textarea><div class="traffic-small mt-1">Khớp dạng chứa chuỗi, không phân biệt hoa thường.</div></div>
+<div class="col-12"><button type="submit" class="btn btn-primary">Lưu cấu hình tường lửa</button></div>
+</form>
+</div>
+<div class="traffic-table-card p-4 mb-4">
+<div class="traffic-section-head"><div><h5 class="mb-0">Chặn IP truy cập website</h5><div class="traffic-small mt-2">IP bị chặn sẽ không truy cập được trang ngoài website và các API public liên quan.</div></div><div class="traffic-section-meta"><?php echo number_format(count($blockedIpRows)); ?> IP đang bị chặn</div></div>
+<form method="POST" class="traffic-ip-form mb-3">
+<input type="hidden" name="csrf_token" value="<?php echo e(generate_csrf_token()); ?>">
+<input type="hidden" name="traffic_action" value="block_ip">
+<div class="form-group"><label class="form-label">IP cần chặn</label><input type="text" name="ip_address" class="form-control" placeholder="Ví dụ: 123.123.123.123" required></div>
+<div class="form-group"><label class="form-label">Ghi chú</label><input type="text" name="block_reason" class="form-control" placeholder="Lý do chặn, ví dụ spam hoặc quét bot"></div>
+<div><button type="submit" class="btn btn-danger">Chặn IP</button></div>
+</form>
+<div class="table-responsive"><table class="table align-middle"><thead><tr><th>IP</th><th>Ghi chú</th><th>Người chặn</th><th class="text-end">Lượt chặn</th><th>Lần gần nhất</th><th>Thời gian</th><th class="text-end">Thao tác</th></tr></thead><tbody><?php if ($blockedIpRows): foreach ($blockedIpRows as $blockedRow): ?><tr><td><span class="badge-soft badge-danger-soft"><?php echo htmlspecialchars($blockedRow['ip_address']); ?></span></td><td><?php echo htmlspecialchars($blockedRow['block_reason'] ?: '-'); ?></td><td><?php echo htmlspecialchars($blockedRow['blocked_by'] ?: '-'); ?></td><td class="text-end fw-semibold"><?php echo number_format((int) ($blockedRow['attempts_count'] ?? 0)); ?></td><td><?php echo htmlspecialchars($blockedRow['last_attempt_at'] ?: '-'); ?></td><td><?php echo htmlspecialchars($blockedRow['created_at']); ?></td><td class="text-end"><form method="POST" class="traffic-inline-form justify-content-end"><input type="hidden" name="csrf_token" value="<?php echo e(generate_csrf_token()); ?>"><input type="hidden" name="traffic_action" value="unblock_ip"><input type="hidden" name="ip_address" value="<?php echo htmlspecialchars($blockedRow['ip_address']); ?>"><button type="submit" class="btn btn-outline-secondary btn-sm">Bỏ chặn</button></form></td></tr><?php endforeach; else: ?><tr><td colspan="7" class="text-center text-muted py-4">Chưa có IP nào bị chặn.</td></tr><?php endif; ?></tbody></table></div>
+</div>
+<div class="traffic-table-card p-4 mb-4">
+<div class="traffic-section-head"><div><h5 class="mb-0">Tín hiệu nghi ngờ</h5><div class="traffic-small mt-2">Chỉ hiển thị IP đã bị chặn, bot/crawler, hoặc phiên có số pageview cao bất thường trong bộ lọc hiện tại.</div></div><div class="traffic-section-meta"><?php echo number_format(count($suspiciousRows)); ?> IP</div></div>
+<div class="table-responsive"><table class="table align-middle"><thead><tr><th>IP</th><th>Dấu hiệu</th><th>Nguồn / User-agent</th><th>ISP</th><th class="text-end">Sessions</th><th class="text-end">PV</th><th>Lần gần nhất</th><th class="text-end">Thao tác</th></tr></thead><tbody><?php if ($suspiciousRows): foreach ($suspiciousRows as $row): $blockedRow = $blockedIpMap[$row['ip_address']] ?? null; $uaText = (string) ($row['user_agent'] ?? ''); $uaShort = function_exists('mb_strimwidth') ? mb_strimwidth($uaText, 0, 120, '...', 'UTF-8') : (strlen($uaText) > 120 ? substr($uaText, 0, 117) . '...' : $uaText); ?><tr><td><span class="badge-soft <?php echo $blockedRow ? 'badge-danger-soft' : 'badge-warning-soft'; ?>"><?php echo htmlspecialchars($row['ip_address'] ?: '-'); ?></span></td><td><div class="d-flex gap-1 flex-wrap"><?php if (!empty($row['is_blocked'])): ?><span class="badge-soft badge-danger-soft">Đã chặn</span><?php endif; ?><?php if (!empty($row['is_bot'])): ?><span class="badge-soft badge-warning-soft">Bot/crawler</span><?php endif; ?><?php if (!empty($row['is_high_pageviews'])): ?><span class="badge-soft">PV cao</span><?php endif; ?></div></td><td><div class="fw-semibold"><?php echo htmlspecialchars($row['source_name'] ?: $row['source_host'] ?: '-'); ?></div><div class="traffic-small"><?php echo htmlspecialchars($uaShort); ?></div></td><td><?php echo htmlspecialchars($row['isp_name'] ?: '-'); ?></td><td class="text-end fw-semibold"><?php echo number_format((int) $row['total_sessions']); ?></td><td class="text-end fw-semibold"><?php echo number_format((int) $row['total_pageviews']); ?></td><td><?php echo htmlspecialchars($row['last_seen'] ?: '-'); ?></td><td class="text-end"><?php if (($row['ip_address'] ?? '') !== ''): ?><?php if ($blockedRow): ?><form method="POST" class="traffic-inline-form justify-content-end"><input type="hidden" name="csrf_token" value="<?php echo e(generate_csrf_token()); ?>"><input type="hidden" name="traffic_action" value="unblock_ip"><input type="hidden" name="ip_address" value="<?php echo htmlspecialchars($row['ip_address']); ?>"><button type="submit" class="btn btn-outline-secondary btn-sm">Bỏ chặn</button></form><?php else: ?><form method="POST" class="traffic-inline-form justify-content-end"><input type="hidden" name="csrf_token" value="<?php echo e(generate_csrf_token()); ?>"><input type="hidden" name="traffic_action" value="block_ip"><input type="hidden" name="ip_address" value="<?php echo htmlspecialchars($row['ip_address']); ?>"><input type="hidden" name="block_reason" value="Chặn từ log nghi ngờ"><button type="submit" class="btn btn-outline-danger btn-sm">Chặn</button></form><?php endif; ?><?php endif; ?></td></tr><?php endforeach; else: ?><tr><td colspan="8" class="text-center text-muted py-4">Chưa có tín hiệu nghi ngờ trong bộ lọc hiện tại.</td></tr><?php endif; ?></tbody></table></div>
+</div>
+<div class="traffic-table-card p-4 mb-4">
+<div class="traffic-section-head"><div><h5 class="mb-0">Rate-limit đang theo dõi</h5><div class="traffic-small mt-2">Các IP có lượng request đạt ít nhất 50% ngưỡng auto-ban hiện tại.</div></div><div class="traffic-section-meta">Ngưỡng hiển thị: <?php echo number_format($securityRateThreshold); ?> request</div></div>
+<div class="table-responsive"><table class="table align-middle"><thead><tr><th>IP</th><th class="text-end">Request đã ghi nhận</th><th>Bucket gần nhất</th><th class="text-end">Thao tác</th></tr></thead><tbody><?php if ($securityRateRows): foreach ($securityRateRows as $row): $blockedRow = $blockedIpMap[$row['ip_address']] ?? null; $lastBucket = (int) ($row['last_bucket'] ?? 0); ?><tr><td><span class="badge-soft <?php echo $blockedRow ? 'badge-danger-soft' : 'badge-warning-soft'; ?>"><?php echo htmlspecialchars($row['ip_address'] ?: '-'); ?></span></td><td class="text-end fw-semibold"><?php echo number_format((int) $row['total_hits']); ?></td><td><?php echo $lastBucket > 0 ? htmlspecialchars(date('Y-m-d H:i:s', $lastBucket * max(1, (int) $fwSettings['autoban_window']))) : '-'; ?></td><td class="text-end"><?php if (($row['ip_address'] ?? '') !== ''): ?><?php if ($blockedRow): ?><form method="POST" class="traffic-inline-form justify-content-end"><input type="hidden" name="csrf_token" value="<?php echo e(generate_csrf_token()); ?>"><input type="hidden" name="traffic_action" value="unblock_ip"><input type="hidden" name="ip_address" value="<?php echo htmlspecialchars($row['ip_address']); ?>"><button type="submit" class="btn btn-outline-secondary btn-sm">Bỏ chặn</button></form><?php else: ?><form method="POST" class="traffic-inline-form justify-content-end"><input type="hidden" name="csrf_token" value="<?php echo e(generate_csrf_token()); ?>"><input type="hidden" name="traffic_action" value="block_ip"><input type="hidden" name="ip_address" value="<?php echo htmlspecialchars($row['ip_address']); ?>"><input type="hidden" name="block_reason" value="Chặn từ rate-limit"><button type="submit" class="btn btn-outline-danger btn-sm">Chặn</button></form><?php endif; ?><?php endif; ?></td></tr><?php endforeach; else: ?><tr><td colspan="4" class="text-center text-muted py-4">Chưa có IP nào đạt ngưỡng theo dõi rate-limit.</td></tr><?php endif; ?></tbody></table></div>
+</div>
+</div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 <script>
 const trendLabels = <?php echo json_encode(array_map(static function ($day) { return date('d/m', strtotime($day)); }, array_keys($daysMap)), JSON_UNESCAPED_UNICODE); ?>;
@@ -701,5 +816,21 @@ const visitorEl = document.getElementById('trafficVisitorChart');
 const newVisitors = <?php echo (int)($summary['new_visitors'] ?? 0); ?>;
 const returningVisitors = <?php echo max(0, (int)($summary['visitors']??0) - (int)($summary['new_visitors']??0)); ?>;
 if (visitorEl && window.Chart) { new Chart(visitorEl, { type: 'doughnut', data: { labels: ['Khách mới', 'Quay lại'], datasets: [{ data: [newVisitors, returningVisitors], backgroundColor: ['#15803d','#b45309'], borderWidth: 0 }] }, options: { maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } } }); }
+</script>
+<script>
+(function () {
+    var btns = document.querySelectorAll('.traffic-tab-btn[data-traffic-tab]');
+    var panes = document.querySelectorAll('.traffic-tab-pane[data-traffic-tab-pane]');
+    function activate(key) {
+        btns.forEach(function (b) { b.classList.toggle('active', b.getAttribute('data-traffic-tab') === key); });
+        panes.forEach(function (p) { p.classList.toggle('active', p.getAttribute('data-traffic-tab-pane') === key); });
+    }
+    btns.forEach(function (b) {
+        b.addEventListener('click', function () { activate(b.getAttribute('data-traffic-tab')); });
+    });
+    var initial = 'overview';
+    if (location.hash === '#security') { initial = 'security'; }
+    activate(initial);
+})();
 </script>
 <?php require_once '../includes/footer.php'; ?>

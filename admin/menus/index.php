@@ -16,6 +16,14 @@ if (!in_array($activePosition, $allowedPositions, true)) {
 $error = '';
 $success = '';
 
+try {
+    if (function_exists('has_table_column') && !has_table_column($pdo, 'menus', 'target_blank')) {
+        $pdo->exec("ALTER TABLE menus ADD COLUMN target_blank TINYINT(1) NOT NULL DEFAULT 0 AFTER status");
+    }
+} catch (Throwable $e) {
+    error_log('Menu target_blank migration error: ' . $e->getMessage());
+}
+
 function fetch_menus_by_position($pdo, $position)
 {
     $stmt = $pdo->prepare("SELECT * FROM menus WHERE position = ? ORDER BY parent_id ASC, sort_order ASC, id ASC");
@@ -73,10 +81,11 @@ function render_admin_menu_items(array $items)
         $url = e($item['url'] ?? '');
         $parentId = (int) ($item['parent_id'] ?? 0);
         $status = (int) ($item['status'] ?? 1);
+        $targetBlank = (int) ($item['target_blank'] ?? 0);
         $position = e($item['position'] ?? 'header');
         $hasChildren = !empty($item['children']);
 
-        echo '<li class="menu-item" data-id="' . $id . '" data-name="' . $name . '" data-url="' . $url . '" data-parent-id="' . $parentId . '" data-position="' . $position . '" data-status="' . $status . '">';
+        echo '<li class="menu-item" data-id="' . $id . '" data-name="' . $name . '" data-url="' . $url . '" data-parent-id="' . $parentId . '" data-position="' . $position . '" data-status="' . $status . '" data-target-blank="' . $targetBlank . '">';
         echo '<div class="menu-item-card">';
         echo '<div class="menu-item-main">';
         echo '<span class="drag-handle" title="Kéo để sắp xếp"><i class="bi bi-grip-vertical"></i></span>';
@@ -207,6 +216,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $position = $_POST['position'] ?? 'header';
             $parentId = (int) ($_POST['parent_id'] ?? 0);
             $status = (int) ($_POST['status'] ?? 1);
+            $targetBlank = isset($_POST['target_blank']) ? 1 : 0;
 
             if ($name === '') {
                 throw new RuntimeException('Tên menu không được để trống.');
@@ -233,8 +243,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $maxStmt->execute([$position, $parentId]);
             $sortOrder = (int) $maxStmt->fetchColumn() + 1;
 
-            $stmt = $pdo->prepare("INSERT INTO menus (name, url, parent_id, sort_order, position, status) VALUES (?, ?, ?, ?, ?, ?)");
-            $stmt->execute([$name, $url, $parentId, $sortOrder, $position, $status]);
+            $stmt = $pdo->prepare("INSERT INTO menus (name, url, parent_id, sort_order, position, status, target_blank) VALUES (?, ?, ?, ?, ?, ?, ?)");
+            $stmt->execute([$name, $url, $parentId, $sortOrder, $position, $status, $targetBlank]);
             $new_id = $pdo->lastInsertId();
 
             if (function_exists('log_activity')) {
@@ -252,6 +262,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $position = $_POST['position'] ?? 'header';
             $parentId = (int) ($_POST['parent_id'] ?? 0);
             $status = (int) ($_POST['status'] ?? 1);
+            $targetBlank = isset($_POST['target_blank']) ? 1 : 0;
 
             if ($id <= 0 || $name === '') {
                 throw new RuntimeException('Dữ liệu cập nhật không hợp lệ.');
@@ -293,8 +304,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             }
 
-            $updateStmt = $pdo->prepare("UPDATE menus SET name = ?, url = ?, parent_id = ?, position = ?, status = ? WHERE id = ?");
-            $updateStmt->execute([$name, $url, $parentId, $position, $status, $id]);
+            $updateStmt = $pdo->prepare("UPDATE menus SET name = ?, url = ?, parent_id = ?, position = ?, status = ?, target_blank = ? WHERE id = ?");
+            $updateStmt->execute([$name, $url, $parentId, $position, $status, $targetBlank, $id]);
 
             if (function_exists('log_activity')) {
                 log_activity('update', 'menu', $id, "Cập nhật menu: $name");
@@ -424,6 +435,11 @@ require_once '../includes/header.php';
                             <div class="form-text">Có thể nhập URL nội bộ, URL đầy đủ, `#`, `tel:` hoặc `mailto:`.</div>
                         </div>
 
+                        <div class="form-check form-switch mb-3">
+                            <input class="form-check-input" type="checkbox" name="target_blank" value="1" id="addTargetBlank">
+                            <label class="form-check-label" for="addTargetBlank">Mở trong tab mới</label>
+                        </div>
+
                         <?php if (!empty($menu_cat_options)): ?>
                         <div class="mb-3">
                             <label class="form-label">Hoặc chọn nhanh theo danh mục</label>
@@ -544,6 +560,11 @@ require_once '../includes/header.php';
                     <div class="mb-3">
                         <label class="form-label">URL</label>
                         <input type="text" class="form-control" name="url" id="editUrl">
+                    </div>
+
+                    <div class="form-check form-switch mb-3">
+                        <input class="form-check-input" type="checkbox" name="target_blank" value="1" id="editTargetBlank">
+                        <label class="form-check-label" for="editTargetBlank">Mở trong tab mới</label>
                     </div>
 
                     <?php if (!empty($menu_cat_options)): ?>
@@ -680,6 +701,7 @@ require_once '../includes/header.php';
         const editId = document.getElementById('editId');
         const editName = document.getElementById('editName');
         const editUrl = document.getElementById('editUrl');
+        const editTargetBlank = document.getElementById('editTargetBlank');
         const editPosition = document.getElementById('editPosition');
         const editStatus = document.getElementById('editStatus');
         const editParentSelect = document.getElementById('editParentSelect');
@@ -695,10 +717,12 @@ require_once '../includes/header.php';
                 const position = menuItem.dataset.position || 'header';
                 const parentId = menuItem.dataset.parentId || '0';
                 const status = menuItem.dataset.status || '1';
+                const targetBlank = menuItem.dataset.targetBlank || '0';
 
                 editId.value = id;
                 editName.value = name;
                 editUrl.value = url;
+                editTargetBlank.checked = targetBlank === '1';
                 editPosition.value = position;
                 editStatus.value = status;
                 buildParentSelectOptions(editParentSelect, position, parentId, id);

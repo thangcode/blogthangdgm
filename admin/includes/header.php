@@ -557,7 +557,7 @@ catch (Exception $e) { /* Ignore sidebar error */
             </a>
             <a href="<?php echo BASE_URL; ?>admin/traffic/index.php"
                 class="nav-link-admin <?php echo ($current_page == 'traffic') ? 'active' : ''; ?>">
-                <i class="bi bi-bar-chart-line"></i> Lưu lượng truy cập
+                <i class="bi bi-bar-chart-line"></i> Truy cập & Bảo mật
             </a>
             <a href="<?php echo BASE_URL; ?>admin/conversions/index.php"
                 class="nav-link-admin <?php echo ($current_page == 'conversions') ? 'active' : ''; ?>">

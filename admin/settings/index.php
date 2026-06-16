@@ -12,7 +12,7 @@ $current_page = 'settings';
 // before header.php is included — so expired sessions could save as "Guest".
 require_admin_login();
 
-$allowed_tabs = ['general', 'appearance', 'contact', 'footer', 'email', 'url', 'performance', 'ai', 'deal_bubble', 'sidebar'];
+$allowed_tabs = ['general', 'appearance', 'contact', 'footer', 'email', 'url', 'performance', 'ai', 'deal_bubble', 'sidebar', 'tracking'];
 
 function normalize_tab($tab, $allowed_tabs)
 {
@@ -51,6 +51,9 @@ function setting_group_from_key($key)
     }
     if (strpos($key, 'sidebar_') === 0) {
         return 'sidebar';
+    }
+    if (strpos($key, 'custom_script_') === 0) {
+        return 'tracking';
     }
     return 'general';
 }
@@ -382,12 +385,45 @@ require_once '../includes/header.php';
                             id="sidebar-tab" data-bs-toggle="tab" data-tab-key="sidebar" href="#sidebar"
                             role="tab"><i class="bi bi-layout-sidebar-inset-reverse me-1"></i>Sidebar</a>
                     </li>
+                    <li class="nav-item">
+                        <a class="nav-link <?php echo $active_tab === 'tracking' ? 'active' : ''; ?>"
+                            id="tracking-tab" data-bs-toggle="tab" data-tab-key="tracking" href="#tracking"
+                            role="tab"><i class="bi bi-code-square me-1"></i>Mã chèn / Tracking</a>
+                    </li>
 
                 </ul>
             </div>
 
             <div class="card-body">
                 <div class="tab-content" id="settingTabsContent">
+                    <div class="tab-pane fade <?php echo $active_tab === 'tracking' ? 'show active' : ''; ?>"
+                        id="tracking" role="tabpanel">
+                        <div class="alert alert-info d-flex align-items-start gap-2">
+                            <i class="bi bi-info-circle fs-5 mt-1"></i>
+                            <div class="small">
+                                Dán mã đo lường/quảng cáo (Google Tag Manager, Google Analytics, Facebook Pixel, TikTok, AdSense...).
+                                Chỉ chấp nhận script từ các domain tin cậy (Google, Facebook, TikTok, Clarity, Hotjar...). Mã không hợp lệ sẽ bị bỏ qua khi hiển thị.
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Mã trong &lt;head&gt; (Header)</label>
+                            <textarea class="form-control font-monospace" name="settings[custom_script_header]" rows="7"
+                                placeholder="VD: Google Tag Manager, GA4, Facebook Pixel..." spellcheck="false"><?php echo e($settings['custom_script_header'] ?? ''); ?></textarea>
+                            <div class="form-text">Chèn ngay trước <code>&lt;/head&gt;</code> trên mọi trang.</div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Mã ngay sau &lt;body&gt; (Body)</label>
+                            <textarea class="form-control font-monospace" name="settings[custom_script_body]" rows="5"
+                                placeholder="VD: GTM noscript (iframe)..." spellcheck="false"><?php echo e($settings['custom_script_body'] ?? ''); ?></textarea>
+                            <div class="form-text">Chèn ngay sau thẻ mở <code>&lt;body&gt;</code> (vd: GTM noscript).</div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Mã cuối trang (Footer)</label>
+                            <textarea class="form-control font-monospace" name="settings[custom_script_footer]" rows="5"
+                                placeholder="VD: script chạy cuối trang..." spellcheck="false"><?php echo e($settings['custom_script_footer'] ?? ''); ?></textarea>
+                            <div class="form-text">Chèn trước <code>&lt;/body&gt;</code> ở cuối trang.</div>
+                        </div>
+                    </div>
                     <div class="tab-pane fade <?php echo $active_tab === 'general' ? 'show active' : ''; ?>"
                         id="general" role="tabpanel">
                         <div class="mb-3">

@@ -1,0 +1,858 @@
+/* ============================================
+   FPTStore — Component CSS (Below the Fold)
+   Breadcrumbs, Cards, Footer, Modals, Contact, Responsive
+   ============================================ */
+
+/* ===== Blur-Up / Shimmer Lazy Image Loading ===== */
+img.lazy-img {
+    background: linear-gradient(90deg, #eef2ff 25%, #e0e7ff 50%, #eef2ff 75%);
+    background-size: 200% 100%;
+    animation: imgShimmer 1.4s ease infinite;
+    transition: opacity 0.4s ease;
+}
+@keyframes imgShimmer {
+    0%   { background-position: 200% center; }
+    100% { background-position: -200% center; }
+}
+img.lazy-img.lazy-loaded {
+    animation: none;
+    background: none;
+}
+/* --- Breadcrumb --- */
+.breadcrumb-premium {
+    background: linear-gradient(135deg, #f0f0ff 0%, #eef2ff 100%);
+    border: 1px solid rgba(99, 102, 241, 0.1);
+    border-radius: 50px;
+    padding: 10px 20px;
+    margin-bottom: 1.5rem;
+    display: inline-flex;
+    align-items: center;
+    box-shadow: 0 2px 12px rgba(99, 102, 241, 0.06);
+}
+
+.breadcrumb-premium .breadcrumb {
+    margin-bottom: 0;
+    background: none;
+    padding: 0;
+    --bs-breadcrumb-divider: '';
+}
+
+.breadcrumb-premium .breadcrumb-item+.breadcrumb-item::before {
+    content: '';
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-right: 2px solid #c4c4c4;
+    border-bottom: 2px solid #c4c4c4;
+    transform: rotate(-45deg);
+    vertical-align: middle;
+    padding: 0;
+    float: none;
+    margin-left: 10px;
+    margin-right: 14px;
+}
+
+.breadcrumb-premium .breadcrumb-item a {
+    color: #666;
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 0.88rem;
+    transition: all 0.25s ease;
+    position: relative;
+}
+
+.breadcrumb-premium .breadcrumb-item a:hover {
+    color: var(--primary-color);
+}
+
+.breadcrumb-premium .breadcrumb-item a .bi {
+    font-size: 1rem;
+    vertical-align: -1px;
+}
+
+.breadcrumb-premium .breadcrumb-item.active {
+    color: var(--primary-color);
+    font-weight: 700;
+    font-size: 0.88rem;
+}
+
+.breadcrumb-premium .breadcrumb-item.active a {
+    color: var(--primary-color);
+    font-weight: 700;
+}
+
+.breadcrumb-premium .breadcrumb-item.active a:hover {
+    color: var(--primary-color);
+}
+
+@media (max-width: 575.98px) {
+    .breadcrumb-premium {
+        padding: 8px 14px;
+        border-radius: 12px;
+    }
+
+    .breadcrumb-premium .breadcrumb-item a,
+    .breadcrumb-premium .breadcrumb-item.active {
+        font-size: 0.8rem;
+    }
+}
+
+/* --- Global Link Hover System --- */
+a:not(.btn):not(.nav-link):not(.navbar-brand):not(.dropdown-item):not(.contact-btn):not(.related-thumb):not([class*="badge"]):not(.category-card-link):not(.page-link):not(.back-to-top) {
+    transition: color 0.25s ease;
+}
+
+.service-card h5 a,
+.service-card .card-title a {
+    transition: color 0.3s ease !important;
+}
+
+.service-card h5 a:hover,
+.service-card .card-title a:hover {
+    color: var(--primary-color) !important;
+}
+
+.internet-card .service-name a {
+    transition: color 0.3s ease !important;
+}
+
+.internet-card .service-name a:hover {
+    color: var(--primary-color) !important;
+}
+
+.card a.text-dark,
+.card .card-title a {
+    transition: color 0.3s ease !important;
+}
+
+.card a.text-dark:hover,
+.card .card-title a:hover {
+    color: var(--primary-color) !important;
+}
+
+.card {
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.08) !important;
+}
+
+.related-thumb {
+    transition: transform 0.3s ease;
+    overflow: hidden;
+}
+
+.related-thumb:hover {
+    transform: scale(1.02);
+}
+
+.related-thumb img {
+    transition: transform 0.4s ease;
+}
+
+.related-thumb:hover img {
+    transform: scale(1.08);
+}
+
+.footer-col ul li a {
+    color: #adb5bd;
+    text-decoration: none;
+    position: relative;
+    padding-left: 0;
+    transition: color 0.25s ease, padding-left 0.3s ease;
+}
+
+.footer-col ul li a::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 50%;
+    width: 0;
+    height: 2px;
+    background: var(--primary-color);
+    transform: translateY(-50%);
+    transition: width 0.3s ease;
+}
+
+.footer-col ul li a:hover {
+    color: var(--primary-color);
+    padding-left: 14px;
+}
+
+.footer-col ul li a:hover::before {
+    width: 8px;
+}
+
+.list-group-item a:not(.btn) {
+    color: var(--text-color);
+    text-decoration: none;
+    transition: color 0.25s ease;
+}
+
+.list-group-item a:not(.btn):hover {
+    color: var(--primary-color);
+}
+
+.page-link {
+    transition: all 0.25s ease;
+}
+
+.page-link:hover {
+    background-color: #eef2ff;
+    border-color: var(--primary-color);
+    color: var(--primary-color);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 10px rgba(99, 102, 241, 0.15);
+}
+
+.page-item.active .page-link {
+    background-color: var(--primary-color);
+    border-color: var(--primary-color);
+}
+
+.post-content a:not(.btn),
+.service-content a:not(.btn),
+article a:not(.btn):not(.category-card-link) {
+    color: var(--primary-color);
+    text-decoration: none;
+    background-image: linear-gradient(var(--primary-color), var(--primary-color));
+    background-size: 0% 2px;
+    background-position: 0 100%;
+    background-repeat: no-repeat;
+    transition: background-size 0.3s ease, color 0.25s ease;
+}
+
+.post-content a:not(.btn):hover,
+.service-content a:not(.btn):hover,
+article a:not(.btn):not(.category-card-link):hover {
+    background-size: 100% 2px;
+    color: var(--hover-color);
+}
+
+/* --- Register Modal --- */
+#registerModal .form-control,
+#registerModal .form-select {
+    border: 2px solid #e9ecef;
+    transition: all 0.3s ease;
+}
+
+#registerModal .form-control:focus,
+#registerModal .form-select:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+}
+
+#registerModal .form-control::placeholder {
+    color: #adb5bd;
+}
+
+#registerModal .form-control.is-invalid,
+#registerModal .form-select.is-invalid {
+    border-color: #dc3545 !important;
+    box-shadow: 0 0 0 3px rgba(220, 53, 69, 0.15) !important;
+    animation: shake-field 0.4s ease;
+}
+
+#registerModal .invalid-feedback {
+    display: none;
+    color: #dc3545;
+    font-size: 0.8rem;
+    margin-top: 4px;
+    padding-left: 16px;
+    font-weight: 500;
+}
+
+#registerModal .is-invalid~.invalid-feedback,
+#registerModal .form-control.is-invalid+.invalid-feedback,
+#registerModal .form-select.is-invalid+.invalid-feedback {
+    display: block;
+    animation: fade-in-down 0.3s ease;
+}
+
+@keyframes shake-field {
+
+    0%,
+    100% {
+        transform: translateX(0);
+    }
+
+    20% {
+        transform: translateX(-6px);
+    }
+
+    40% {
+        transform: translateX(6px);
+    }
+
+    60% {
+        transform: translateX(-4px);
+    }
+
+    80% {
+        transform: translateX(4px);
+    }
+}
+
+@keyframes fade-in-down {
+    from {
+        opacity: 0;
+        transform: translateY(-5px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* --- Footer --- */
+.footer-col h3 {
+    font-size: 1.1rem;
+    font-weight: 700;
+    margin-bottom: 1.2rem;
+    color: #fff;
+    text-transform: uppercase;
+}
+
+.footer-col ul {
+    list-style: none;
+    padding: 0;
+}
+
+.footer-col ul li {
+    margin-bottom: 0.5rem;
+}
+
+.footer-col ul li a,
+.footer-col p {
+    color: #adb5bd;
+    text-decoration: none;
+    transition: color 0.2s;
+}
+
+.footer-col ul li a:hover {
+    color: var(--primary-color);
+}
+
+/* --- Region & Price Animation --- */
+.region-option.active {
+    background-color: var(--primary-color) !important;
+    color: #fff !important;
+}
+
+.region-option:hover {
+    opacity: 0.9;
+}
+
+.price-amount.price-bump,
+#detail-price-display.price-bump {
+    animation: priceBump .28s ease;
+}
+
+@keyframes priceBump {
+    0% {
+        transform: translateY(2px);
+        opacity: .35;
+    }
+
+    100% {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+/* --- Floating Contact --- */
+.floating-contact {
+    position: fixed;
+    bottom: 100px;
+    right: 25px;
+    z-index: 9999;
+}
+
+.contact-toggle {
+    width: 62px;
+    height: 62px;
+    background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-accent) 50%, var(--primary-color) 100%);
+    background-size: 200% 200%;
+    animation: gradientShift 3s ease infinite;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 6px 30px var(--primary-glow, rgba(99, 102, 241, 0.45));
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    border: 3px solid rgba(255, 255, 255, 0.3);
+}
+
+@keyframes gradientShift {
+
+    0%,
+    100% {
+        background-position: 0% 50%;
+    }
+
+    50% {
+        background-position: 100% 50%;
+    }
+}
+
+.contact-toggle i {
+    font-size: 1.5rem;
+    color: #fff;
+    transition: transform 0.3s ease;
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.2));
+}
+
+.contact-toggle:hover {
+    transform: scale(1.12);
+    box-shadow: 0 8px 35px var(--primary-glow, rgba(99, 102, 241, 0.55));
+}
+
+.contact-toggle:hover i {
+    transform: rotate(-10deg) scale(1.1);
+}
+
+.pulse-ring {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    border: 2px solid color-mix(in srgb, var(--primary-color) 60%, transparent);
+    border-radius: 50%;
+    animation: pulse-ring 2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+@keyframes pulse-ring {
+    0% {
+        transform: scale(1);
+        opacity: 0.8;
+    }
+
+    70% {
+        transform: scale(1.6);
+        opacity: 0;
+    }
+
+    100% {
+        transform: scale(1.6);
+        opacity: 0;
+    }
+}
+
+.contact-options {
+    position: absolute;
+    bottom: 78px;
+    right: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(15px) scale(0.95);
+    transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.contact-options.active {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0) scale(1);
+}
+
+.contact-options.active .contact-btn:nth-child(1) {
+    animation: fadeSlideUp 0.3s 0.05s both;
+}
+
+.contact-options.active .contact-btn:nth-child(2) {
+    animation: fadeSlideUp 0.3s 0.12s both;
+}
+
+.contact-options.active .contact-btn:nth-child(3) {
+    animation: fadeSlideUp 0.3s 0.19s both;
+}
+
+@keyframes fadeSlideUp {
+    from {
+        opacity: 0;
+        transform: translateY(12px) scale(0.9);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+.contact-btn {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 11px 18px;
+    border-radius: 50px;
+    text-decoration: none;
+    color: #fff;
+    font-weight: 600;
+    font-size: 0.88rem;
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.18);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    white-space: nowrap;
+    cursor: pointer;
+    border: 2px solid rgba(255, 255, 255, 0.15);
+    backdrop-filter: blur(4px);
+}
+
+.contact-btn:hover {
+    transform: translateX(-6px) scale(1.03);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.25);
+    color: #fff;
+    border-color: rgba(255, 255, 255, 0.3);
+}
+
+.contact-btn.phone {
+    background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+}
+
+.contact-btn.phone:hover {
+    box-shadow: 0 8px 25px rgba(34, 197, 94, 0.4);
+}
+
+.contact-btn.zalo {
+    background: linear-gradient(135deg, #0068ff 0%, #0099ff 100%);
+}
+
+.contact-btn.zalo:hover {
+    box-shadow: 0 8px 25px rgba(0, 104, 255, 0.4);
+}
+
+.contact-btn.messenger {
+    background: linear-gradient(135deg, var(--primary-accent), var(--primary-color));
+}
+
+.contact-btn.messenger:hover {
+    box-shadow: 0 8px 25px var(--primary-glow, rgba(139, 92, 246, 0.4));
+}
+
+.contact-btn i {
+    font-size: 1.15rem;
+}
+
+.zalo-icon {
+    width: 22px;
+    height: 22px;
+    background: #fff;
+    color: #0068ff;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+    font-size: 0.78rem;
+    flex-shrink: 0;
+}
+
+.contact-label {
+    display: inline;
+}
+
+/* --- Contact Confirm Modal --- */
+.contact-confirm-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.45);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    z-index: 10001;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    opacity: 0;
+    transition: opacity 0.25s ease;
+}
+
+.contact-confirm-overlay.show {
+    display: flex;
+    opacity: 1;
+}
+
+.contact-confirm-card {
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-radius: 24px;
+    width: 100%;
+    max-width: 380px;
+    overflow: hidden;
+    box-shadow: 0 25px 60px rgba(0, 0, 0, 0.2), 0 0 0 1px rgba(255, 255, 255, 0.5);
+    transform: scale(0.9) translateY(20px);
+    transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.contact-confirm-overlay.show .contact-confirm-card {
+    transform: scale(1) translateY(0);
+}
+
+.confirm-header {
+    padding: 28px 24px 20px;
+    text-align: center;
+    position: relative;
+}
+
+.confirm-icon-wrap {
+    width: 64px;
+    height: 64px;
+    border-radius: 20px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 16px;
+    font-size: 1.6rem;
+    color: #fff;
+    animation: iconBounce 0.5s 0.3s both;
+}
+
+@keyframes iconBounce {
+    0% {
+        transform: scale(0) rotate(-10deg);
+    }
+
+    60% {
+        transform: scale(1.15) rotate(3deg);
+    }
+
+    100% {
+        transform: scale(1) rotate(0);
+    }
+}
+
+.confirm-icon-wrap.phone-icon {
+    background: linear-gradient(135deg, #22c55e, #16a34a);
+    box-shadow: 0 8px 20px rgba(34, 197, 94, 0.3);
+}
+
+.confirm-icon-wrap.zalo-icon-lg {
+    background: linear-gradient(135deg, #0068ff, #0099ff);
+    box-shadow: 0 8px 20px rgba(0, 104, 255, 0.3);
+}
+
+.confirm-icon-wrap.messenger-icon {
+    background: linear-gradient(135deg, var(--primary-accent), var(--primary-color));
+    box-shadow: 0 8px 20px var(--primary-glow, rgba(139, 92, 246, 0.3));
+}
+
+.confirm-header h5 {
+    font-weight: 700;
+    font-size: 1.15rem;
+    color: #1a1a1a;
+    margin: 0 0 6px;
+}
+
+.confirm-header p {
+    color: #666;
+    font-size: 0.9rem;
+    margin: 0;
+    line-height: 1.5;
+}
+
+.confirm-body {
+    padding: 0 24px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.confirm-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 16px;
+    background: #f8f9fa;
+    border-radius: 14px;
+    border: 1px solid #eee;
+}
+
+.confirm-info-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+    color: #fff;
+    flex-shrink: 0;
+}
+
+.confirm-info-text {
+    font-weight: 700;
+    font-size: 1rem;
+    color: #1a1a1a;
+    letter-spacing: 0.3px;
+}
+
+.confirm-info-sub {
+    font-size: 0.78rem;
+    color: #999;
+    margin-top: 1px;
+}
+
+.confirm-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 4px;
+}
+
+.confirm-btn {
+    flex: 1;
+    padding: 13px 16px;
+    border-radius: 14px;
+    border: none;
+    font-weight: 700;
+    font-size: 0.92rem;
+    cursor: pointer;
+    transition: all 0.25s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    white-space: nowrap;
+}
+
+.confirm-btn-cancel {
+    background: #f1f3f5;
+    color: #666;
+}
+
+.confirm-btn-cancel:hover {
+    background: #e9ecef;
+    color: #333;
+}
+
+.confirm-btn-ok {
+    color: #fff;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
+}
+
+.confirm-btn-ok.phone-ok {
+    background: linear-gradient(135deg, #22c55e, #16a34a);
+}
+
+.confirm-btn-ok.phone-ok:hover {
+    box-shadow: 0 6px 20px rgba(34, 197, 94, 0.4);
+    transform: translateY(-1px);
+}
+
+.confirm-btn-ok.zalo-ok {
+    background: linear-gradient(135deg, #0068ff, #0099ff);
+}
+
+.confirm-btn-ok.zalo-ok:hover {
+    box-shadow: 0 6px 20px rgba(0, 104, 255, 0.4);
+    transform: translateY(-1px);
+}
+
+.confirm-btn-ok.messenger-ok {
+    background: linear-gradient(135deg, var(--primary-accent), var(--primary-color));
+}
+
+.confirm-btn-ok.messenger-ok:hover {
+    box-shadow: 0 6px 20px var(--primary-glow, rgba(139, 92, 246, 0.4));
+    transform: translateY(-1px);
+}
+
+.confirm-trust {
+    text-align: center;
+    font-size: 0.75rem;
+    color: #aaa;
+    margin-top: 2px;
+}
+
+.confirm-trust i {
+    color: #22c55e;
+    margin-right: 3px;
+}
+
+/* --- Back to Top --- */
+.back-to-top {
+    position: fixed;
+    bottom: 25px;
+    right: 25px;
+    width: 48px;
+    height: 48px;
+    background: #fff;
+    color: var(--primary-color);
+    border: 2px solid var(--primary-color);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 9998;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.3s ease;
+}
+
+.back-to-top.show {
+    opacity: 1;
+    visibility: visible;
+}
+
+.back-to-top:hover {
+    background: var(--primary-color);
+    color: #fff;
+    transform: translateY(-4px);
+    box-shadow: 0 6px 20px rgba(99, 102, 241, 0.25);
+}
+
+.back-to-top i {
+    font-size: 1.3rem;
+    font-weight: bold;
+}
+
+/* --- Mobile Responsive --- */
+@media (max-width: 576px) {
+    .floating-contact {
+        bottom: 85px;
+        right: 15px;
+    }
+
+    .back-to-top {
+        bottom: 18px;
+        right: 15px;
+        width: 44px;
+        height: 44px;
+    }
+
+    .contact-toggle {
+        width: 55px;
+        height: 55px;
+    }
+
+    .contact-label {
+        display: none;
+    }
+
+    .contact-btn {
+        padding: 12px;
+        border-radius: 50%;
+    }
+
+    .contact-confirm-card {
+        max-width: 340px;
+    }
+
+    .confirm-header {
+        padding: 22px 20px 16px;
+    }
+
+    .confirm-body {
+        padding: 0 20px 20px;
+    }
+}

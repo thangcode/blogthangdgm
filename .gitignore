@@ -1,0 +1,58 @@
+# FPTSTORE Standard .gitignore
+
+# 1. Sensitive Configuration
+# DO NOT COMMIT THIS FILE - IT CONTAINS DB PASSWORDS AND SECURITY KEYS
+config/config.php
+config.php
+
+# 2. Dependencies
+/vendor/
+/node_modules/
+
+# 3. User Uploads (Managed per environment)
+/assets/uploads/*
+!/assets/uploads/.gitkeep
+
+# 4. OS/System Junk
+.DS_Store
+Thumbs.db
+*.log
+error_log
+
+# 5. IDE Settings
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+
+# 6. Environment Files
+.env
+.env.local
+.env.*.local
+
+# 7. Temporary / Backup files
+*.bak
+*.tmp
+*.swp
+/backups/*
+!/backups/.htaccess
+
+# 8. Database Folder (Contains SQL dumps and migrations)
+/database/*
+!/database/.gitkeep
+!/database/.htaccess
+
+# 9. Temporary Scripts (Used during setup/migration)
+migrate_ecommerce.php
+run_migration.php
+tmp_check_tables.php
+
+
+# 11. Cache & Temporary
+/cache/
+reset_user.php
+tmp_check_db.php
+tmp_check_tables.php
+
+# 12. Server-specific (modified by admin panel)
+.htaccess

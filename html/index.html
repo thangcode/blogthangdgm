@@ -1,0 +1,840 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Internet FPT - WiFi Cáp Quang Nhanh, Ổn Định, Giá Tốt</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        fpt: {
+                            orange: '#F37021', // FPT Orange
+                            hover: '#D65D18',
+                            secondary: '#46B549' // FPT Green accent
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Roboto', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+
+<body class="bg-gray-50 text-gray-800 font-sans antialiased overflow-x-hidden">
+
+    <!-- Header -->
+    <header id="header"
+        class="fixed w-full top-0 z-50 transition-all duration-300 bg-white/95 backdrop-blur-sm border-b border-gray-100">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-20">
+                <!-- Logo -->
+                <div class="flex-shrink-0 flex items-center gap-2 cursor-pointer">
+                    <!-- FPT Logo style -->
+                    <div class="relative w-12 h-8">
+                        <div class="absolute inset-0 bg-fpt-orange skew-x-12 rounded-sm opacity-90"></div>
+                        <div
+                            class="absolute inset-0 flex items-center justify-center text-white font-bold italic text-lg z-10 skew-x-12">
+                            FPT</div>
+                    </div>
+                </div>
+
+                <!-- Desktop Menu -->
+                <nav class="hidden md:flex space-x-8">
+                    <a href="#" class="text-fpt-orange font-medium border-b-2 border-fpt-orange pb-1">Internet</a>
+                    <a href="#" class="text-gray-600 hover:text-fpt-orange font-medium transition-colors">Truyền
+                        hình</a>
+                    <a href="#" class="text-gray-600 hover:text-fpt-orange font-medium transition-colors">Camera</a>
+                    <a href="#" class="text-gray-600 hover:text-fpt-orange font-medium transition-colors">Tin tức</a>
+                    <a href="#" class="text-gray-600 hover:text-fpt-orange font-medium transition-colors">Hỗ trợ</a>
+                </nav>
+
+                <!-- CTA Button -->
+                <div class="hidden md:flex items-center">
+                    <a href="#register"
+                        class="bg-gradient-to-r from-fpt-orange to-yellow-500 hover:from-fpt-hover hover:to-orange-600 text-white px-6 py-2.5 rounded-full font-medium transition-all shadow-lg hover:shadow-orange-500/30 transform hover:-translate-y-0.5">
+                        Đăng ký ngay
+                    </a>
+                </div>
+
+                <!-- Mobile menu button -->
+                <div class="md:hidden flex items-center">
+                    <button class="text-gray-600 hover:text-fpt-orange focus:outline-none">
+                        <i data-lucide="menu" class="w-8 h-8"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Hero Section -->
+    <section class="relative pt-32 pb-20 overflow-hidden bg-gradient-to-br from-gray-50 to-orange-50/50">
+        <div
+            class="absolute top-0 right-0 w-1/2 h-full bg-gradient-to-l from-yellow-100/30 to-transparent skew-x-12 transform origin-top-right">
+        </div>
+
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+                <!-- Text Content -->
+                <div class="space-y-8 animate-fade-in-up">
+                    <div
+                        class="inline-flex items-center gap-2 px-3 py-1 bg-orange-100 text-fpt-orange rounded-full text-sm font-semibold">
+                        <span class="w-2 h-2 bg-fpt-orange rounded-full animate-pulse"></span>
+                        Khuyến mãi hot tháng 2/2026
+                    </div>
+
+                    <h1 class="text-5xl lg:text-6xl font-black text-gray-900 leading-tight">
+                        Internet FPT <br>
+                        <span class="text-transparent bg-clip-text bg-gradient-to-r from-fpt-orange to-yellow-400">Siêu
+                            Tốc Độ</span>
+                    </h1>
+
+                    <p class="text-xl text-gray-600 max-w-lg leading-relaxed">
+                        Trải nghiệm kết nối không giới hạn với công nghệ WiFi 6 tiên tiến nhất. Ổn định, mượt mà cho mọi
+                        nhu cầu.
+                    </p>
+
+                    <div class="flex flex-col sm:flex-row gap-4">
+                        <a href="#pricing"
+                            class="flex items-center justify-center gap-2 bg-gradient-to-r from-fpt-orange to-yellow-500 hover:from-fpt-hover hover:to-orange-600 text-white px-8 py-4 rounded-full font-bold text-lg transition-all shadow-xl hover:shadow-orange-500/40">
+                            Xem các gói cước
+                            <i data-lucide="arrow-right" class="w-5 h-5"></i>
+                        </a>
+                        <div
+                            class="flex items-center gap-4 px-6 py-3 bg-white rounded-full shadow-sm border border-orange-100">
+                            <div class="text-left">
+                                <p class="text-xs text-gray-500 font-medium uppercase tracking-wider">Giá chỉ từ</p>
+                                <p class="text-2xl font-bold text-fpt-orange">165.000đ<span
+                                        class="text-sm text-gray-500 font-normal">/tháng</span></p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center gap-6 text-sm font-medium text-gray-500 pt-4">
+                        <div class="flex items-center gap-2">
+                            <i data-lucide="check-circle-2" class="w-5 h-5 text-green-500"></i> Lắp đặt 24h
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <i data-lucide="check-circle-2" class="w-5 h-5 text-green-500"></i> Modem WiFi 6
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <i data-lucide="check-circle-2" class="w-5 h-5 text-green-500"></i> Tặng 1-2 tháng
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Hero Image Placeholder -->
+                <div class="relative lg:h-[600px] flex items-center justify-center">
+                    <div
+                        class="relative w-full h-full bg-gradient-to-br from-fpt-orange to-yellow-400 rounded-3xl overflow-hidden shadow-2xl transform rotate-3 hover:rotate-0 transition-all duration-500 group">
+                        <!-- Simulated Image content -->
+                        <img src="https://images.unsplash.com/photo-1531297461136-82lw9z2c2b3d?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80"
+                            alt="Happy Family Internet"
+                            class="w-full h-full object-cover opacity-90 group-hover:scale-105 transition-transform duration-700">
+
+                        <!-- Floating Badge -->
+                        <div
+                            class="absolute bottom-8 left-8 bg-white/90 backdrop-blur-md p-4 rounded-2xl shadow-lg border border-white/20 animate-bounce-slow">
+                            <div class="flex items-center gap-3">
+                                <div class="bg-orange-100 p-2 rounded-full text-fpt-orange">
+                                    <i data-lucide="wifi" class="w-6 h-6"></i>
+                                </div>
+                                <div>
+                                    <p class="text-xs text-gray-500 font-bold">Tốc độ cao</p>
+                                    <p class="text-lg font-bold text-gray-900">1 Gbps</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Decor elements -->
+                    <div
+                        class="absolute -z-10 top-10 right-10 w-32 h-32 bg-yellow-300 rounded-full blur-3xl opacity-20">
+                    </div>
+                    <div
+                        class="absolute -z-10 bottom-10 left-10 w-40 h-40 bg-fpt-orange rounded-full blur-3xl opacity-20">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Special Promotions Section -->
+    <section class="py-16 bg-white relative overflow-hidden">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+            <div class="text-center mb-12">
+                <h2
+                    class="text-3xl md:text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-fpt-orange to-red-600 uppercase tracking-wide">
+                    Giá Cước Ưu Đãi Tốt
+                </h2>
+                <div class="w-24 h-1 bg-fpt-orange mx-auto mt-4 rounded-full"></div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <!-- Promo Card 1 -->
+                <div
+                    class="relative bg-gradient-to-br from-fpt-orange to-red-500 rounded-3xl p-1 overflow-hidden shadow-xl hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1">
+                    <div class="bg-white rounded-[20px] p-8 h-full relative overflow-hidden group">
+                        <div
+                            class="absolute top-0 right-0 bg-yellow-400 text-red-900 text-xs font-bold px-4 py-1 rounded-bl-xl z-20">
+                            KHUY&#7870;N M&#7840;I HOT</div>
+
+                        <div class="flex items-center gap-4 mb-6">
+                            <div
+                                class="w-16 h-16 bg-orange-100 rounded-2xl flex items-center justify-center text-fpt-orange group-hover:scale-110 transition-transform">
+                                <i data-lucide="gift" class="w-8 h-8"></i>
+                            </div>
+                            <div>
+                                <h3 class="text-xl font-bold text-gray-900">Combo Siêu Tiết Kiệm</h3>
+                                <p class="text-sm text-gray-500">Dành cho gia đình trẻ</p>
+                            </div>
+                        </div>
+
+                        <ul class="space-y-3 mb-8">
+                            <li class="flex items-start gap-3">
+                                <i data-lucide="check-circle" class="w-5 h-5 text-green-500 shrink-0"></i>
+                                <span class="text-gray-700">Internet <b>GIGA 150Mbps</b></span>
+                            </li>
+                            <li class="flex items-start gap-3">
+                                <i data-lucide="check-circle" class="w-5 h-5 text-green-500 shrink-0"></i>
+                                <span class="text-gray-700">Truyền hình <b>FPT Play</b> (Gói MAX)</span>
+                            </li>
+                            <li class="flex items-start gap-3">
+                                <i data-lucide="check-circle" class="w-5 h-5 text-green-500 shrink-0"></i>
+                                <span class="text-gray-700 font-bold text-fpt-orange">Tặng Modem WiFi 6 + Box TV</span>
+                            </li>
+                        </ul>
+
+                        <div class="flex items-center justify-between mt-auto">
+                            <div>
+                                <p class="text-sm text-gray-500 line-through">350.000đ</p>
+                                <p class="text-3xl font-black text-fpt-orange">215.000<span
+                                        class="text-sm text-gray-500 font-medium">đ/tháng</span></p>
+                            </div>
+                            <a href="#"
+                                class="bg-fpt-orange hover:bg-fpt-hover text-white px-6 py-3 rounded-xl font-bold shadow-lg shadow-orange-500/30 transition-all">
+                                Đăng ký
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Promo Card 2 -->
+                <div
+                    class="relative bg-gradient-to-br from-blue-500 to-cyan-500 rounded-3xl p-1 overflow-hidden shadow-xl hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1">
+                    <div class="bg-white rounded-[20px] p-8 h-full relative overflow-hidden group">
+                        <div
+                            class="absolute top-0 right-0 bg-blue-500 text-white text-xs font-bold px-4 py-1 rounded-bl-xl z-20">
+                            PHỔ BIẾN NHẤT</div>
+
+                        <div class="flex items-center gap-4 mb-6">
+                            <div
+                                class="w-16 h-16 bg-blue-100 rounded-2xl flex items-center justify-center text-blue-600 group-hover:scale-110 transition-transform">
+                                <i data-lucide="zap" class="w-8 h-8"></i>
+                            </div>
+                            <div>
+                                <h3 class="text-xl font-bold text-gray-900">Gói SKY Tốc Độ Cao</h3>
+                                <p class="text-sm text-gray-500">Không giới hạn băng thông</p>
+                            </div>
+                        </div>
+
+                        <ul class="space-y-3 mb-8">
+                            <li class="flex items-start gap-3">
+                                <i data-lucide="check-circle" class="w-5 h-5 text-blue-500 shrink-0"></i>
+                                <span class="text-gray-700">Tốc độ <b>Download 1Gbps</b></span>
+                            </li>
+                            <li class="flex items-start gap-3">
+                                <i data-lucide="check-circle" class="w-5 h-5 text-blue-500 shrink-0"></i>
+                                <span class="text-gray-700">Upload <b>150Mbps</b></span>
+                            </li>
+                            <li class="flex items-start gap-3">
+                                <i data-lucide="check-circle" class="w-5 h-5 text-blue-500 shrink-0"></i>
+                                <span class="text-gray-700 font-bold text-blue-600">Phù hợp Livestream, Gaming</span>
+                            </li>
+                        </ul>
+
+                        <div class="flex items-center justify-between mt-auto">
+                            <div>
+                                <p class="text-sm text-gray-500 line-through">280.000đ</p>
+                                <p class="text-3xl font-black text-blue-600">225.000<span
+                                        class="text-sm text-gray-500 font-medium">đ/tháng</span></p>
+                            </div>
+                            <a href="#"
+                                class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl font-bold shadow-lg shadow-blue-500/30 transition-all">
+                                Đăng ký
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+    <section id="pricing" class="py-24 bg-white">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="text-center max-w-3xl mx-auto mb-16">
+                <h2 class="text-3xl md:text-4xl font-bold text-gray-900 mb-4">Gói cước Internet FPT</h2>
+                <p class="text-gray-600 text-lg">Lựa chọn gói cước phù hợp nhất với nhu cầu sử dụng của bạn và gia đình.
+                </p>
+
+                <!-- Tabs -->
+                <div class="mt-8 inline-flex p-1 bg-gray-100 rounded-xl overflow-hidden">
+                    <button
+                        class="px-6 py-2.5 rounded-lg text-sm font-bold bg-white text-fpt-orange shadow-sm transition-all">
+                        Internet Đơn lẻ
+                    </button>
+                    <button
+                        class="px-6 py-2.5 rounded-lg text-sm font-bold text-gray-500 hover:text-gray-900 transition-all">
+                        Combo Internet + TV
+                    </button>
+                    <button
+                        class="px-6 py-2.5 rounded-lg text-sm font-bold text-gray-500 hover:text-gray-900 transition-all">
+                        Combo Internet + Camera
+                    </button>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+                <!-- Internet Pricing Group -->
+                <div class="col-span-1 md:col-span-4 mb-8">
+                    <div class="flex items-center gap-4 mb-8">
+                        <div
+                            class="w-10 h-10 rounded-full bg-fpt-orange flex items-center justify-center text-white font-bold">
+                            1</div>
+                        <h3 class="text-2xl font-bold text-gray-800">Gói Cước Cá Nhân Siêu Tiết Kiệm</h3>
+                        <div class="flex-1 h-px bg-gray-200"></div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                        <!-- Package GIGA -->
+                        <div
+                            class="group relative bg-white rounded-3xl border border-gray-100 shadow-sm hover:shadow-xl hover:border-fpt-orange transition-all duration-300">
+                            <div class="p-6 text-center border-b border-gray-100">
+                                <h4 class="text-2xl font-black text-fpt-orange mb-2">GIGA</h4>
+                                <p class="text-gray-500 text-sm">Cơ bản cho nhu cầu hàng ngày</p>
+                            </div>
+                            <div class="p-6">
+                                <div class="text-center mb-6">
+                                    <span class="text-4xl font-black text-gray-900">165.000</span>
+                                    <span class="text-gray-500 font-medium">đ/tháng</span>
+                                </div>
+                                <ul class="space-y-4 mb-8">
+                                    <li class="flex items-center gap-3 text-sm text-gray-600">
+                                        <i data-lucide="download" class="w-5 h-5 text-fpt-orange"></i> Download/Upload
+                                        <b>150Mbps</b>
+                                    </li>
+                                    <li class="flex items-center gap-3 text-sm text-gray-600">
+                                        <i data-lucide="router" class="w-5 h-5 text-fpt-orange"></i> Trang bị Modem
+                                        <b>WiFi 6</b>
+                                    </li>
+                                </ul>
+                                <a href="#"
+                                    class="block w-full py-3 rounded-xl border-2 border-fpt-orange text-fpt-orange font-bold hover:bg-fpt-orange hover:text-white transition-all text-center">Đăng
+                                    Ký Ngay</a>
+                            </div>
+                        </div>
+
+                        <!-- Package SKY -->
+                        <div
+                            class="group relative bg-gradient-to-b from-orange-50 to-white rounded-3xl border border-orange-200 shadow-lg scale-105 z-10">
+                            <div
+                                class="absolute top-0 right-0 bg-red-500 text-white text-xs font-bold px-3 py-1 rounded-bl-xl rounded-tr-3xl">
+                                HOT</div>
+                            <div class="p-6 text-center border-b border-orange-100">
+                                <h4 class="text-2xl font-black text-red-600 mb-2">SKY</h4>
+                                <p class="text-gray-600 text-sm">Không giới hạn băng thông</p>
+                            </div>
+                            <div class="p-6">
+                                <div class="text-center mb-6">
+                                    <span class="text-4xl font-black text-red-600">225.000</span>
+                                    <span class="text-gray-500 font-medium">đ/tháng</span>
+                                </div>
+                                <ul class="space-y-4 mb-8">
+                                    <li class="flex items-center gap-3 text-sm text-gray-700">
+                                        <i data-lucide="zap" class="w-5 h-5 text-red-500"></i> Download <b>1 Gbps</b>
+                                    </li>
+                                    <li class="flex items-center gap-3 text-sm text-gray-700">
+                                        <i data-lucide="upload" class="w-5 h-5 text-red-500"></i> Upload <b>150 Mbps</b>
+                                    </li>
+                                    <li class="flex items-center gap-3 text-sm text-gray-700">
+                                        <i data-lucide="router" class="w-5 h-5 text-red-500"></i> Modem WiFi 6 <b>2 băng
+                                            tần</b>
+                                    </li>
+                                </ul>
+                                <a href="#"
+                                    class="block w-full py-3 rounded-xl bg-gradient-to-r from-fpt-orange to-red-600 text-white font-bold shadow-lg hover:shadow-orange-500/40 transition-all text-center">Đăng
+                                    Ký Ngay</a>
+                            </div>
+                        </div>
+
+                        <!-- Package META -->
+                        <div
+                            class="group relative bg-white rounded-3xl border border-gray-100 shadow-sm hover:shadow-xl hover:border-fpt-orange transition-all duration-300">
+                            <div class="p-6 text-center border-b border-gray-100">
+                                <h4 class="text-2xl font-black text-fpt-orange mb-2">META</h4>
+                                <p class="text-gray-500 text-sm">Dành cho Streamer, Gamer</p>
+                            </div>
+                            <div class="p-6">
+                                <div class="text-center mb-6">
+                                    <span class="text-4xl font-black text-gray-900">325.000</span>
+                                    <span class="text-gray-500 font-medium">đ/tháng</span>
+                                </div>
+                                <ul class="space-y-4 mb-8">
+                                    <li class="flex items-center gap-3 text-sm text-gray-600">
+                                        <i data-lucide="zap" class="w-5 h-5 text-fpt-orange"></i> Download/Upload <b>1
+                                            Gbps</b>
+                                    </li>
+                                    <li class="flex items-center gap-3 text-sm text-gray-600">
+                                        <i data-lucide="shield-check" class="w-5 h-5 text-fpt-orange"></i> Tính năng
+                                        <b>Ultra Fast</b>
+                                    </li>
+                                </ul>
+                                <a href="#"
+                                    class="block w-full py-3 rounded-xl border-2 border-fpt-orange text-fpt-orange font-bold hover:bg-fpt-orange hover:text-white transition-all text-center">Đăng
+                                    Ký Ngay</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Combo TV Group -->
+                <div class="col-span-1 md:col-span-4 mb-8 pt-12">
+                    <div class="flex items-center gap-4 mb-8">
+                        <div
+                            class="w-10 h-10 rounded-full bg-green-500 flex items-center justify-center text-white font-bold">
+                            2</div>
+                        <h3 class="text-2xl font-bold text-gray-800">Gói Cước Truyền Hình Giải Trí Đa Nền Tảng</h3>
+                        <div class="flex-1 h-px bg-gray-200"></div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                        <!-- Combo GIGA -->
+                        <div
+                            class="relative bg-white rounded-3xl border border-gray-100 shadow-sm hover:shadow-xl hover:border-green-500 transition-all duration-300">
+                            <div class="p-6">
+                                <div class="flex justify-between items-start mb-4">
+                                    <div>
+                                        <h4 class="text-xl font-bold text-gray-900">Combo GIGA</h4>
+                                        <span
+                                            class="text-green-600 text-xs font-bold uppercase p-1 bg-green-50 rounded">Tiết
+                                            kiệm nhất</span>
+                                    </div>
+                                    <i data-lucide="tv" class="w-8 h-8 text-green-500"></i>
+                                </div>
+                                <div class="mb-6">
+                                    <span class="text-3xl font-black text-green-600">215.000</span>
+                                    <span class="text-gray-500 font-medium">đ/tháng</span>
+                                </div>
+                                <ul class="space-y-2 mb-6">
+                                    <li class="text-sm text-gray-600 flex gap-2"><i data-lucide="check"
+                                            class="w-4 h-4 text-green-500"></i> Internet 150Mbps</li>
+                                    <li class="text-sm text-gray-600 flex gap-2"><i data-lucide="check"
+                                            class="w-4 h-4 text-green-500"></i> Gói FPT Play <b>MAX</b></li>
+                                    <li class="text-sm text-gray-600 flex gap-2"><i data-lucide="check"
+                                            class="w-4 h-4 text-green-500"></i> Xem 200 kênh TV</li>
+                                </ul>
+                                <a href="#"
+                                    class="block w-full py-3 rounded-xl bg-green-50 text-green-600 font-bold hover:bg-green-600 hover:text-white transition-all text-center">Đăng
+                                    Ký</a>
+                            </div>
+                        </div>
+
+                        <!-- Combo SKY -->
+                        <div
+                            class="relative bg-white rounded-3xl border border-gray-100 shadow-sm hover:shadow-xl hover:border-green-500 transition-all duration-300">
+                            <div class="p-6">
+                                <div class="flex justify-between items-start mb-4">
+                                    <div>
+                                        <h4 class="text-xl font-bold text-gray-900">Combo SKY</h4>
+                                        <span
+                                            class="text-green-600 text-xs font-bold uppercase p-1 bg-green-50 rounded">Đa
+                                            năng</span>
+                                    </div>
+                                    <i data-lucide="tv" class="w-8 h-8 text-green-500"></i>
+                                </div>
+                                <div class="mb-6">
+                                    <span class="text-3xl font-black text-green-600">265.000</span>
+                                    <span class="text-gray-500 font-medium">đ/tháng</span>
+                                </div>
+                                <ul class="space-y-2 mb-6">
+                                    <li class="text-sm text-gray-600 flex gap-2"><i data-lucide="check"
+                                            class="w-4 h-4 text-green-500"></i> Internet 1Gbps/150Mbps</li>
+                                    <li class="text-sm text-gray-600 flex gap-2"><i data-lucide="check"
+                                            class="w-4 h-4 text-green-500"></i> Gói FPT Play <b>MAX</b></li>
+                                </ul>
+                                <a href="#"
+                                    class="block w-full py-3 rounded-xl bg-green-50 text-green-600 font-bold hover:bg-green-600 hover:text-white transition-all text-center">Đăng
+                                    Ký</a>
+                            </div>
+                        </div>
+
+                        <!-- Combo META -->
+                        <div
+                            class="relative bg-white rounded-3xl border border-gray-100 shadow-sm hover:shadow-xl hover:border-green-500 transition-all duration-300">
+                            <div class="p-6">
+                                <div class="flex justify-between items-start mb-4">
+                                    <div>
+                                        <h4 class="text-xl font-bold text-gray-900">Combo META</h4>
+                                        <span
+                                            class="text-green-600 text-xs font-bold uppercase p-1 bg-green-50 rounded">VIP</span>
+                                    </div>
+                                    <i data-lucide="tv" class="w-8 h-8 text-green-500"></i>
+                                </div>
+                                <div class="mb-6">
+                                    <span class="text-3xl font-black text-green-600">365.000</span>
+                                    <span class="text-gray-500 font-medium">đ/tháng</span>
+                                </div>
+                                <ul class="space-y-2 mb-6">
+                                    <li class="text-sm text-gray-600 flex gap-2"><i data-lucide="check"
+                                            class="w-4 h-4 text-green-500"></i> Internet 1Gbps/1Gbps</li>
+                                    <li class="text-sm text-gray-600 flex gap-2"><i data-lucide="check"
+                                            class="w-4 h-4 text-green-500"></i> Gói FPT Play <b>MAX</b></li>
+                                </ul>
+                                <a href="#"
+                                    class="block w-full py-3 rounded-xl bg-green-50 text-green-600 font-bold hover:bg-green-600 hover:text-white transition-all text-center">Đăng
+                                    Ký</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Camera Group -->
+                <div class="col-span-1 md:col-span-4 mb-8 pt-12">
+                    <div class="flex items-center gap-4 mb-8">
+                        <div
+                            class="w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center text-white font-bold">
+                            3</div>
+                        <h3 class="text-2xl font-bold text-gray-800">Gói Cước Camera Gia Đình An Tâm</h3>
+                        <div class="flex-1 h-px bg-gray-200"></div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                        <!-- Camera IQ 3 -->
+                        <div
+                            class="group relative bg-white rounded-3xl border border-gray-100 shadow-sm hover:shadow-xl hover:border-blue-500 transition-all duration-300">
+                            <div class="p-6">
+                                <div class="flex justify-between items-start mb-4">
+                                    <div>
+                                        <h4 class="text-xl font-bold text-gray-900">Camera IQ 3</h4>
+                                        <span
+                                            class="text-blue-600 text-xs font-bold uppercase p-1 bg-blue-50 rounded">Trong
+                                            nhà</span>
+                                    </div>
+                                    <i data-lucide="video" class="w-8 h-8 text-blue-500"></i>
+                                </div>
+                                <div class="mb-6">
+                                    <span class="text-3xl font-black text-gray-900">1.200.000</span>
+                                    <span class="text-gray-500 font-medium">đ/thiết bị</span>
+                                </div>
+                                <ul class="space-y-3 mb-6">
+                                    <li class="text-sm text-gray-600 flex gap-2"><i data-lucide="check"
+                                            class="w-4 h-4 text-blue-500"></i> Độ phân giải <b>Full HD 1080p</b></li>
+                                    <li class="text-sm text-gray-600 flex gap-2"><i data-lucide="check"
+                                            class="w-4 h-4 text-blue-500"></i> Đàm thoại <b>2 chiều</b></li>
+                                    <li class="text-sm text-gray-600 flex gap-2"><i data-lucide="check"
+                                            class="w-4 h-4 text-blue-500"></i> Nhận diện người <b>IQ</b></li>
+                                </ul>
+                                <a href="#"
+                                    class="block w-full py-3 rounded-xl border-2 border-blue-500 text-blue-600 font-bold hover:bg-blue-600 hover:text-white transition-all text-center">Đặt
+                                    Mua</a>
+                            </div>
+                        </div>
+
+                        <!-- Camera IQ 3S -->
+                        <div
+                            class="group relative bg-white rounded-3xl border border-gray-100 shadow-sm hover:shadow-xl hover:border-blue-500 transition-all duration-300">
+                            <div class="p-6">
+                                <div class="flex justify-between items-start mb-4">
+                                    <div>
+                                        <h4 class="text-xl font-bold text-gray-900">Camera IQ 3S</h4>
+                                        <span
+                                            class="text-blue-600 text-xs font-bold uppercase p-1 bg-blue-50 rounded">Ngoài
+                                            trời</span>
+                                    </div>
+                                    <i data-lucide="video" class="w-8 h-8 text-blue-500"></i>
+                                </div>
+                                <div class="mb-6">
+                                    <span class="text-3xl font-black text-gray-900">1.400.000</span>
+                                    <span class="text-gray-500 font-medium">đ/thiết bị</span>
+                                </div>
+                                <ul class="space-y-3 mb-6">
+                                    <li class="text-sm text-gray-600 flex gap-2"><i data-lucide="check"
+                                            class="w-4 h-4 text-blue-500"></i> Chống nước/bụi <b>IP66</b></li>
+                                    <li class="text-sm text-gray-600 flex gap-2"><i data-lucide="check"
+                                            class="w-4 h-4 text-blue-500"></i> Góc quan sát <b>rộng</b></li>
+                                    <li class="text-sm text-gray-600 flex gap-2"><i data-lucide="check"
+                                            class="w-4 h-4 text-blue-500"></i> Lưu trữ <b>Cloud</b> an toàn</li>
+                                </ul>
+                                <a href="#"
+                                    class="block w-full py-3 rounded-xl border-2 border-blue-500 text-blue-600 font-bold hover:bg-blue-600 hover:text-white transition-all text-center">Đặt
+                                    Mua</a>
+                            </div>
+                        </div>
+
+                        <!-- Cloud Storage -->
+                        <div
+                            class="group relative bg-blue-50 rounded-3xl border border-blue-100 shadow-sm hover:shadow-xl transition-all duration-300">
+                            <div class="p-6">
+                                <div class="flex justify-between items-start mb-4">
+                                    <div>
+                                        <h4 class="text-xl font-bold text-gray-900">Gói Cloud</h4>
+                                        <span
+                                            class="text-blue-600 text-xs font-bold uppercase p-1 bg-white rounded">Dịch
+                                            vụ</span>
+                                    </div>
+                                    <i data-lucide="cloud" class="w-8 h-8 text-blue-500"></i>
+                                </div>
+                                <div class="mb-6">
+                                    <span class="text-3xl font-black text-blue-600">44.000</span>
+                                    <span class="text-gray-500 font-medium">đ/tháng</span>
+                                </div>
+                                <p class="text-sm text-gray-600 mb-6">Lưu trữ dữ liệu an toàn trên Cloud của FPT, không
+                                    cần thẻ nhớ, xem lại mọi lúc mọi nơi.</p>
+                                <a href="#"
+                                    class="block w-full py-3 rounded-xl bg-blue-600 text-white font-bold hover:bg-blue-700 transition-all text-center">Đăng
+                                    Ký Gói</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            <div class="mt-8 text-center">
+                <p class="text-sm text-gray-500 italic">* Giá cước đã bao gồm VAT. Khuyến mãi áp dụng tại một số khu
+                    vực.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Speed Info / Why Choose Us -->
+    <section class="py-20 bg-gray-50 border-t border-gray-200 relative overflow-hidden">
+        <div
+            class="absolute top-0 left-0 w-full h-full bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-5">
+        </div>
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+            <div class="text-center max-w-3xl mx-auto mb-16">
+                <h2 class="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
+                    Tốc Độ Internet <span class="text-fpt-orange">Số 1 Việt Nam</span>
+                </h2>
+                <p class="text-gray-600">Được tổ chức Ookla Speedtest công nhận về tốc độ và sự ổn định.</p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-8 text-center">
+                <!-- Stat 1 -->
+                <div
+                    class="bg-white p-8 rounded-3xl shadow-lg border border-gray-100 hover:-translate-y-2 transition-transform duration-300">
+                    <div
+                        class="text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-fpt-orange to-red-600 mb-2">
+                        1 Gbps</div>
+                    <div class="h-1 w-12 bg-gray-200 mx-auto mb-4 rounded-full"></div>
+                    <h3 class="text-lg font-bold text-gray-800 mb-2">Tốc Độ Download</h3>
+                    <p class="text-sm text-gray-500">Nhanh gấp 10 lần so với thế hệ cũ, tải phim 4K trong tích tắc.</p>
+                </div>
+                <!-- Stat 2 -->
+                <div
+                    class="bg-white p-8 rounded-3xl shadow-lg border border-gray-100 hover:-translate-y-2 transition-transform duration-300">
+                    <div
+                        class="text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-fpt-orange to-red-600 mb-2">
+                        WiFi 6</div>
+                    <div class="h-1 w-12 bg-gray-200 mx-auto mb-4 rounded-full"></div>
+                    <h3 class="text-lg font-bold text-gray-800 mb-2">Công Nghệ Mới Nhất</h3>
+                    <p class="text-sm text-gray-500">Độ trễ thấp, phủ sóng rộng, kết nối ổn định 50+ thiết bị.</p>
+                </div> <!-- Stat 3 -->
+                <div
+                    class="bg-white p-8 rounded-3xl shadow-lg border border-gray-100 hover:-translate-y-2 transition-transform duration-300">
+                    <div
+                        class="text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-fpt-orange to-red-600 mb-2">
+                        24/7</div>
+                    <div class="h-1 w-12 bg-gray-200 mx-auto mb-4 rounded-full"></div>
+                    <h3 class="text-lg font-bold text-gray-800 mb-2">Hỗ Trợ Kỹ Thuật</h3>
+                    <p class="text-sm text-gray-500">Xử lý sự cố trong 2 giờ, hỗ trợ online qua Hi FPT mọi lúc mọi nơi.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Installation Promo -->
+    <section class="py-12 bg-gradient-to-r from-red-600 to-fpt-orange text-white relative overflow-hidden">
+        <div
+            class="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-10">
+        </div>
+        <div
+            class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 flex flex-col md:flex-row items-center justify-between gap-8">
+            <div class="text-center md:text-left">
+                <h2 class="text-3xl font-black mb-2 uppercase italic tracking-wider">Ưu Đãi Lắp Đặt Tháng 2</h2>
+                <p class="text-orange-100 text-lg">Đăng ký Online - Nhận ngay Voucher giảm giá thiết bị & Tặng thêm
+                    tháng cước.</p>
+            </div>
+            <a href="#register"
+                class="bg-white text-fpt-orange px-8 py-4 rounded-full font-bold text-lg shadow-xl hover:bg-gray-100 transition-all transform hover:scale-105">
+                Đăng Ký Ngay
+            </a>
+        </div>
+    </section>
+
+    <!-- FAQ Section (Resubmitting) -->
+    <section class="py-20 bg-white border-b border-gray-200">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-16 items-center">
+                <!-- FAQ Content -->
+                <div>
+                    <h2 class="text-3xl font-bold text-gray-900 mb-8">Câu hỏi thường gặp</h2>
+                    <div class="space-y-4">
+                        <!-- Q1 -->
+                        <div
+                            class="bg-gray-50 rounded-xl hover:bg-orange-50 transition-colors border border-gray-100 overflow-hidden">
+                            <button
+                                onclick="this.nextElementSibling.classList.toggle('hidden'); this.querySelector('i').classList.toggle('rotate-180')"
+                                class="w-full px-6 py-4 text-left flex justify-between items-center focus:outline-none">
+                                <span class="font-bold text-gray-800">Thủ tục đăng ký cần những gì?</span>
+                                <i data-lucide="chevron-down"
+                                    class="w-5 h-5 text-gray-400 transition-transform duration-300"></i>
+                            </button>
+                            <div class="px-6 pb-4 text-gray-600 text-sm hidden">
+                                Chỉ cần CMND/CCCD đối với cá nhân. Đối với doanh nghiệp cần thêm Giấy phép kinh doanh.
+                            </div>
+                        </div>
+                        <!-- Q2 -->
+                        <div
+                            class="bg-gray-50 rounded-xl hover:bg-orange-50 transition-colors border border-gray-100 overflow-hidden">
+                            <button
+                                onclick="this.nextElementSibling.classList.toggle('hidden'); this.querySelector('i').classList.toggle('rotate-180')"
+                                class="w-full px-6 py-4 text-left flex justify-between items-center focus:outline-none">
+                                <span class="font-bold text-gray-800">Thời gian lắp đặt bao lâu?</span>
+                                <i data-lucide="chevron-down"
+                                    class="w-5 h-5 text-gray-400 transition-transform duration-300"></i>
+                            </button>
+                            <div class="px-6 pb-4 text-gray-600 text-sm hidden">
+                                FPT cam kết lắp đặt trong vòng 24h-48h kể từ khi ký hợp đồng thành công.
+                            </div>
+                        </div>
+                        <!-- Q3 -->
+                        <div
+                            class="bg-gray-50 rounded-xl hover:bg-orange-50 transition-colors border border-gray-100 overflow-hidden">
+                            <button
+                                onclick="this.nextElementSibling.classList.toggle('hidden'); this.querySelector('i').classList.toggle('rotate-180')"
+                                class="w-full px-6 py-4 text-left flex justify-between items-center focus:outline-none">
+                                <span class="font-bold text-gray-800">Có mất phí hòa mạng không?</span>
+                                <i data-lucide="chevron-down"
+                                    class="w-5 h-5 text-gray-400 transition-transform duration-300"></i>
+                            </button>
+                            <div class="px-6 pb-4 text-gray-600 text-sm hidden">
+                                Miễn phí 100% phí hòa mạng khi khách hàng trả trước 6 hoặc 12 tháng cước.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right Image -->
+                <div class="relative h-[400px]">
+                    <div
+                        class="absolute inset-0 bg-gradient-to-br from-fpt-orange to-red-500 rounded-[40px] rotate-3 opacity-20">
+                    </div>
+                    <img src="https://images.unsplash.com/photo-1556740758-90de374c12ad?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80"
+                        alt="Customer Support"
+                        class="relative w-full h-full object-cover rounded-[40px] shadow-2xl z-10">
+
+                    <div
+                        class="absolute -bottom-6 -left-6 bg-white p-4 rounded-2xl shadow-lg z-20 flex items-center gap-4 animate-bounce-slow">
+                        <div class="bg-green-100 p-3 rounded-full text-green-600">
+                            <i data-lucide="phone-call" class="w-6 h-6"></i>
+                        </div>
+                        <div>
+                            <p class="text-xs text-gray-500">Hỗ trợ 24/7</p>
+                            <p class="text-lg font-bold text-gray-900">1900 6600</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="bg-gray-900 text-white pt-16 pb-8 border-t border-gray-800">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-12 mb-12">
+                <div class="col-span-1 md:col-span-1">
+                    <div class="flex items-center gap-2 mb-6">
+                        <!-- FPT Footer Logo -->
+                        <div class="relative w-10 h-6">
+                            <div class="absolute inset-0 bg-fpt-orange skew-x-12 rounded-sm opacity-90"></div>
+                            <div
+                                class="absolute inset-0 flex items-center justify-center text-white font-bold italic text-sm z-10 skew-x-12">
+                                FPT</div>
+                        </div>
+                    </div>
+                    <p class="text-gray-400 text-sm leading-relaxed">
+                        Nhà cung cấp dịch vụ viễn thông hàng đầu Việt Nam. Luôn tiên phong đổi mới công nghệ để phục vụ
+                        khách hàng tốt nhất.
+                    </p>
+                </div>
+
+                <div>
+                    <h4 class="text-lg font-bold mb-6">Sản phẩm</h4>
+                    <ul class="space-y-4 text-gray-400 text-sm">
+                        <li><a href="#" class="hover:text-fpt-orange transition-colors">Internet Cáp Quang</a></li>
+                        <li><a href="#" class="hover:text-fpt-orange transition-colors">Truyền hình FPT Play</a></li>
+                        <li><a href="#" class="hover:text-fpt-orange transition-colors">Camera Thông Minh</a></li>
+                        <li><a href="#" class="hover:text-fpt-orange transition-colors">FPT Smart Home</a></li>
+                    </ul>
+                </div>
+
+                <div>
+                    <h4 class="text-lg font-bold mb-6">Hỗ trợ</h4>
+                    <ul class="space-y-4 text-gray-400 text-sm">
+                        <li><a href="#" class="hover:text-fpt-orange transition-colors">Kiểm tra vùng phủ</a></li>
+                        <li><a href="#" class="hover:text-fpt-orange transition-colors">Thanh toán cước</a></li>
+                        <li><a href="#" class="hover:text-fpt-orange transition-colors">Báo hỏng dịch vụ</a></li>
+                        <li><a href="#" class="hover:text-fpt-orange transition-colors">Câu hỏi thường gặp</a></li>
+                    </ul>
+                </div>
+
+                <div>
+                    <h4 class="text-lg font-bold mb-6">Liên hệ</h4>
+                    <ul class="space-y-4 text-gray-400 text-sm">
+                        <li class="flex items-center gap-3">
+                            <i data-lucide="phone" class="w-5 h-5 text-fpt-orange"></i>
+                            <span>1900 6600 (Tổng đài)</span>
+                        </li>
+                        <li class="flex items-center gap-3">
+                            <i data-lucide="mail" class="w-5 h-5 text-fpt-orange"></i>
+                            <span>hotro@fpt.com.vn</span>
+                        </li>
+                        <li class="flex items-center gap-3">
+                            <i data-lucide="map-pin" class="w-5 h-5 text-fpt-orange"></i>
+                            <span>Tòa nhà FPT, Phố Duy Tân, Hà Nội</span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="border-t border-gray-800 pt-8 flex flex-col md:flex-row justify-between items-center gap-4">
+                <p class="text-sm text-gray-500">© 2026 Shop Khóa Học. All rights reserved.</p>
+                <div class="flex gap-4">
+                    <a href="#" class="text-gray-500 hover:text-white transition-colors"><i data-lucide="facebook"
+                            class="w-5 h-5"></i></a>
+                    <a href="#" class="text-gray-500 hover:text-white transition-colors"><i data-lucide="youtube"
+                            class="w-5 h-5"></i></a>
+                    <a href="#" class="text-gray-500 hover:text-white transition-colors"><i data-lucide="instagram"
+                            class="w-5 h-5"></i></a>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script src="script.js"></script>
+    <script>
+        lucide.createIcons();
+    </script>
+</body>
+
+</html>

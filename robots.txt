@@ -1,0 +1,24 @@
+# robots.txt — Thắng Digital Marketing (blog)
+
+User-agent: *
+Allow: /
+
+# Khu vực không index
+Disallow: /admin/
+Disallow: /api/
+Disallow: /config/
+Disallow: /includes/
+Disallow: /database/
+Disallow: /scripts/
+Disallow: /search.php
+Disallow: /*?*
+
+# Chặn loại file nhạy cảm
+Disallow: /*.sql$
+Disallow: /*.log$
+
+# Sitemap
+Sitemap: https://thang-dgm.com/sitemap.xml
+
+# Tài nguyên cho AI engines (GEO)
+# llms.txt: https://thang-dgm.com/llms.txt

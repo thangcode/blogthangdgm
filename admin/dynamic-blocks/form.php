@@ -748,10 +748,11 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Toggle category & featured based on type
     function toggleProductOptions() {
-        const selectedType = document.querySelector('input[name="type"]:checked').value;
-        const isProducts = selectedType === 'products';
-        categoryWrapper.style.display = isProducts ? '' : 'none';
-        featuredWrapper.style.display = isProducts ? '' : 'none';
+        const sel = document.querySelector('input[name="type"]:checked');
+        if (!sel) return;
+        const isProducts = sel.value === 'products';
+        if (categoryWrapper) categoryWrapper.style.display = isProducts ? '' : 'none';
+        if (featuredWrapper) featuredWrapper.style.display = isProducts ? '' : 'none';
     }
     typeRadios.forEach(r => r.addEventListener('change', toggleProductOptions));
     toggleProductOptions();
@@ -760,8 +761,9 @@ document.addEventListener('DOMContentLoaded', function() {
     const layoutRadios = document.querySelectorAll('input[name="layout_style"]');
     const waveColorsWrapper = document.getElementById('waveColorsWrapper');
     function toggleWaveColors() {
-        const selectedLayout = document.querySelector('input[name="layout_style"]:checked').value;
-        waveColorsWrapper.style.display = selectedLayout === 'wave' ? '' : 'none';
+        const sel = document.querySelector('input[name="layout_style"]:checked');
+        if (!sel) return;
+        if (waveColorsWrapper) waveColorsWrapper.style.display = sel.value === 'wave' ? '' : 'none';
     }
     layoutRadios.forEach(r => r.addEventListener('change', toggleWaveColors));
 
@@ -805,18 +807,21 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Toggle row options based on display mode
     function toggleRowOptions() {
-        const selectedMode = document.querySelector('input[name="display_mode"]:checked').value;
+        const sel = document.querySelector('input[name="display_mode"]:checked');
+        if (!sel) return;
         rowOptions.forEach(el => {
-            el.style.display = selectedMode === 'row' ? '' : 'none';
+            el.style.display = sel.value === 'row' ? '' : 'none';
         });
     }
     modeRadios.forEach(r => r.addEventListener('change', toggleRowOptions));
     toggleRowOptions();
 
     // Status label toggle
-    statusToggle.addEventListener('change', function() {
-        statusLabel.textContent = this.checked ? 'Hiện' : 'Ẩn';
-    });
+    if (statusToggle) {
+        statusToggle.addEventListener('change', function() {
+            if (statusLabel) statusLabel.textContent = this.checked ? 'Hiện' : 'Ẩn';
+        });
+    }
 
     // ===== Nút "Xem thêm": bật/tắt fields + gợi ý URL theo danh mục =====
     const categoryUrlMap = <?php echo json_encode($category_url_map, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE); ?>;
@@ -876,6 +881,9 @@ window.addEventListener('load', function () {
         license_key: 'gpl', convert_urls: false, toolbar_mode: 'wrap',
         plugins: 'advlist autolink lists link image media table code fullscreen preview charmap',
         toolbar: 'undo redo | blocks | bold italic underline forecolor | alignleft aligncenter alignright | bullist numlist | link image media table | removeformat code fullscreen preview',
+        valid_elements: '*[*]',
+        extended_valid_elements: 'div[*],span[*],a[*],b,i',
+        content_css: '/assets/css/blog.css?v=<?php echo @filemtime(__DIR__ . "/../../assets/css/blog.css") ?: time(); ?>',
         content_style: 'body{font-family:Inter,sans-serif;font-size:16px}img{max-width:100%;height:auto}',
         images_upload_handler: (blobInfo) => new Promise((resolve, reject) => {
             const xhr = new XMLHttpRequest();

@@ -3,18 +3,18 @@
 session_start();
 require_once '../config/database.php';
 require_once '../includes/functions.php';
+require_once '../includes/totp.php';
 
 // Redirect if already logged in
 if (is_admin_logged_in()) {
     redirect('index.php');
 }
 
+ensure_admin_security_columns($pdo);
+
 $error = '';
 
-$ip = $_SERVER['HTTP_X_FORWARDED_FOR'] ?? $_SERVER['HTTP_CF_CONNECTING_IP'] ?? $_SERVER['REMOTE_ADDR'] ?? '';
-if (strpos($ip, ',') !== false) {
-    $ip = trim(explode(',', $ip)[0]);
-}
+$ip = get_client_ip_address();
 $loginNow = time();
 $loginWindow = 900;
 $loginMaxAttempts = 5;
@@ -30,34 +30,51 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $username = trim($_POST['username']);
         $password = $_POST['password'];
         $rememberMe = !empty($_POST['remember_me']);
+        $acctRate = admin_account_rate_limit_status($pdo, $username, $loginWindow, 10);
 
         if (empty($username) || empty($password)) {
             $error = 'Vui lòng nhập tên đăng nhập và mật khẩu.';
+        } elseif (!empty($acctRate['blocked'])) {
+            $remaining = max(1, (int) ceil(((int) ($acctRate['remaining_seconds'] ?? 0)) / 60));
+            $error = "Tài khoản này tạm thời bị khóa do nhập sai quá nhiều lần. Vui lòng thử lại sau {$remaining} phút.";
         } else {
             try {
-                $stmt = $pdo->prepare("SELECT id, username, password, role, full_name FROM users WHERE username = ? AND role = 'admin'");
+                $stmt = $pdo->prepare("SELECT id, username, password, role, full_name, is_active, totp_enabled, totp_secret FROM users WHERE username = ? AND role = 'admin'");
                 $stmt->execute([$username]);
                 $user = $stmt->fetch();
 
                 if ($user && verify_password($password, $user['password'])) {
-                    // Login Success
-                    session_regenerate_id(true);
-                    admin_set_login_session($user);
-                    admin_clear_login_attempts($pdo, $ip);
+                    if ((int) ($user['is_active'] ?? 1) === 0) {
+                        $error = 'Tài khoản đã bị vô hiệu hóa. Vui lòng liên hệ quản trị viên.';
+                    } elseif (!empty($user['totp_enabled']) && !empty($user['totp_secret'])) {
+                        // Mật khẩu đúng → chuyển sang bước xác thực 2 lớp (2FA).
+                        admin_clear_login_attempts($pdo, $ip);
+                        admin_account_clear($pdo, $username);
+                        session_regenerate_id(true);
+                        $_SESSION['pending_2fa_user_id'] = (int) $user['id'];
+                        $_SESSION['pending_2fa_remember'] = $rememberMe ? 1 : 0;
+                        $_SESSION['pending_2fa_time'] = time();
+                        redirect('login-2fa.php');
+                    } else {
+                        // Login Success (không bật 2FA)
+                        session_regenerate_id(true);
+                        admin_set_login_session($user);
+                        admin_clear_login_attempts($pdo, $ip);
+                        admin_account_clear($pdo, $username);
+                        $pdo->prepare("UPDATE users SET last_login_at = NOW() WHERE id = ?")->execute([(int) $user['id']]);
 
-                    admin_clear_remember_me($pdo, (int) $user['id']);
-                    if ($rememberMe) {
-                        admin_issue_remember_me($pdo, $user);
+                        admin_clear_remember_me($pdo, (int) $user['id']);
+                        if ($rememberMe) {
+                            admin_issue_remember_me($pdo, $user);
+                        }
+                        if (function_exists('log_activity')) {
+                            log_activity('login', 'user', $user['id'], 'Đăng nhập thành công');
+                        }
+                        redirect('index.php');
                     }
-
-                    // Log Activity
-                    if (function_exists('log_activity')) {
-                        log_activity('login', 'user', $user['id'], 'Đăng nhập thành công');
-                    }
-
-                    redirect('index.php');
                 } else {
                     admin_record_failed_login_attempt($pdo, $ip, $username, $loginWindow, $loginMaxAttempts);
+                    admin_account_record_failed($pdo, $username, $loginWindow, 10);
                     $loginRate = admin_login_rate_limit_status($pdo, $ip, $loginWindow, $loginMaxAttempts);
                     if (!empty($loginRate['blocked'])) {
                         $remaining = max(1, (int) ceil(((int) ($loginRate['remaining_seconds'] ?? 0)) / 60));

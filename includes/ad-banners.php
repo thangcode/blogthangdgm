@@ -22,6 +22,9 @@ if (!function_exists('ad_banners_ensure_schema')) {
                 `image_path`        VARCHAR(500) NOT NULL DEFAULT '',
                 `mobile_image_path` VARCHAR(500) NOT NULL DEFAULT '',
                 `link_url`          VARCHAR(1000) NOT NULL DEFAULT '',
+                `link_follow`       TINYINT(1) NOT NULL DEFAULT 0,
+                `banner_type`       VARCHAR(10) NOT NULL DEFAULT 'image',
+                `html_content`      LONGTEXT NULL,
                 `slot`              VARCHAR(40) NOT NULL DEFAULT '',
                 `sort_order`        INT NOT NULL DEFAULT 0,
                 `status`            TINYINT(1) NOT NULL DEFAULT 1,
@@ -35,6 +38,17 @@ if (!function_exists('ad_banners_ensure_schema')) {
                 KEY `idx_slot_status` (`slot`, `status`),
                 KEY `idx_schedule` (`start_at`, `end_at`)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
+            // Tự vá schema cho bảng đã tồn tại từ trước (idempotent).
+            if (!$pdo->query("SHOW COLUMNS FROM ad_banners LIKE 'link_follow'")->fetch()) {
+                $pdo->exec("ALTER TABLE ad_banners ADD COLUMN `link_follow` TINYINT(1) NOT NULL DEFAULT 0 AFTER `link_url`");
+            }
+            if (!$pdo->query("SHOW COLUMNS FROM ad_banners LIKE 'banner_type'")->fetch()) {
+                $pdo->exec("ALTER TABLE ad_banners ADD COLUMN `banner_type` VARCHAR(10) NOT NULL DEFAULT 'image' AFTER `link_follow`");
+            }
+            if (!$pdo->query("SHOW COLUMNS FROM ad_banners LIKE 'html_content'")->fetch()) {
+                $pdo->exec("ALTER TABLE ad_banners ADD COLUMN `html_content` LONGTEXT NULL AFTER `banner_type`");
+            }
         } catch (Throwable $e) {
             error_log('ad_banners_ensure_schema error: ' . $e->getMessage());
         }

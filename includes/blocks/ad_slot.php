@@ -15,6 +15,15 @@ $is_sticky = ($ad_slot === 'sticky_bottom');
 $above_fold = ($ad_slot === 'home_top');
 
 $render_one = function (array $b, bool $eager) {
+    // Banner kiểu HTML tùy chỉnh: render thẳng, không bọc ảnh/link.
+    if ((string) ($b['banner_type'] ?? 'image') === 'html') {
+        $html = trim((string) ($b['html_content'] ?? ''));
+        if ($html === '') {
+            return '';
+        }
+        $id = (int) ($b['id'] ?? 0);
+        return '<div class="ss-spot__html" data-spot-id="' . $id . '">' . $html . '</div>';
+    }
     $img = trim((string) ($b['image_path'] ?? ''));
     if ($img === '') {
         return '';
@@ -48,6 +57,15 @@ $wrap_class = 'ss-spot ss-spot--' . preg_replace('/[^a-z0-9_-]/', '', $ad_slot);
 if ($is_sticky) {
     $wrap_class .= ' ss-spot--sticky';
 }
+
+// Ẩn nhãn "Tài trợ" khi tất cả banner trong slot đều là HTML tùy chỉnh.
+$only_html = true;
+foreach ($ad_items as $_b) {
+    if ((string) ($_b['banner_type'] ?? 'image') !== 'html') {
+        $only_html = false;
+        break;
+    }
+}
 ?>
 <?php if ($is_sticky): ?>
 <div class="<?php echo $wrap_class; ?>" id="ssSpotBar" hidden>
@@ -65,7 +83,7 @@ if ($is_sticky) {
 </script>
 <?php else: ?>
 <div class="<?php echo $wrap_class; ?>">
-    <span class="ss-spot__tag">Tài trợ</span>
+    <?php if (!$only_html): ?><span class="ss-spot__tag">Tài trợ</span><?php endif; ?>
     <?php if ($ad_multi && count($ad_items) > 1): ?>
         <div class="ss-spot__list">
             <?php foreach ($ad_items as $i => $b): ?>
@@ -86,6 +104,9 @@ $GLOBALS['_ss_spot_css_emitted'] = true; ?>
 .ss-spot__link { display: block; border-radius: 12px; overflow: hidden; line-height: 0; box-shadow: 0 4px 16px rgba(0,0,0,.06); transition: transform .2s ease, box-shadow .2s ease; }
 .ss-spot__link:hover { transform: translateY(-2px); box-shadow: 0 10px 24px rgba(0,0,0,.12); }
 .ss-spot__media { width: 100%; height: auto; display: block; }
+.ss-spot__html { line-height: 1.6; }
+.ss-spot__html > :first-child { margin-top: 0; }
+.ss-spot__html > :last-child { margin-bottom: 0; }
 .ss-spot__list { display: flex; flex-direction: column; gap: 14px; }
 .ss-spot--product_sidebar { position: sticky; top: 90px; }
 .ss-spot--post_sidebar { margin: 0; }

@@ -35,6 +35,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($check->fetch()) {
                 $error = 'Tên đăng nhập <strong>' . e($username) . '</strong> đã tồn tại.';
             }
+            elseif ($email !== '' && (function () use ($pdo, $email) {
+                $c = $pdo->prepare("SELECT id FROM users WHERE email = ? LIMIT 1");
+                $c->execute([$email]);
+                return (bool) $c->fetch();
+            })()) {
+                $error = 'Email <strong>' . e($email) . '</strong> đã được dùng cho tài khoản khác.';
+            }
             else {
                 $hashed = secure_password($password);
                 $stmt = $pdo->prepare("INSERT INTO users (username, password, role, full_name, email, created_at) VALUES (?, ?, 'admin', ?, ?, NOW())");

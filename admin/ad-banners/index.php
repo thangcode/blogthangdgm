@@ -139,7 +139,7 @@ require_once '../includes/header.php';
                         <tr data-id="<?php echo (int) $b['id']; ?>">
                             <td><img src="<?php echo e($img); ?>" alt="" style="width:80px;height:42px;object-fit:cover;border-radius:6px;"></td>
                             <td>
-                                <div class="fw-semibold"><?php echo e($b['title']); ?></div>
+                                <div class="fw-semibold"><?php echo e($b['title']); ?><?php if (($b['banner_type'] ?? 'image') === 'html'): ?> <span class="badge bg-info text-dark"><i class="bi bi-code-slash"></i> HTML</span><?php endif; ?></div>
                                 <span class="badge bg-light text-dark"><?php echo e($slots[$b['slot']]['label'] ?? $b['slot']); ?></span>
                             </td>
                             <td><small class="text-muted"><?php echo $sched ? e(implode('<br>', $sched)) : 'Không giới hạn'; ?></small></td>

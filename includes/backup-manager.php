@@ -115,7 +115,7 @@ class BackupManager
         if (!$handle)
             return false;
 
-        fwrite($handle, "-- ShopSieuSale Database Backup\n");
+        fwrite($handle, "-- Blog Thang DGM Database Backup\n");
         fwrite($handle, "-- Date: " . date('Y-m-d H:i:s') . "\n\n");
         fwrite($handle, "SET FOREIGN_KEY_CHECKS=0;\n\n");
 
@@ -189,8 +189,7 @@ class BackupManager
                 if (is_dir($file)) {
                     $zip->addEmptyDir($relativePath);
                 } else if (is_file($file)) {
-                    $content = file_get_contents($file);
-                    $zip->addFromString($relativePath, $content);
+                    $zip->addFile($file, $relativePath);
 
                     // Apply encryption if password is set
                     if ($password) {
@@ -214,5 +213,195 @@ class BackupManager
         }
 
         return $zip->close();
+    }
+
+    /**
+     * SQL-aware statement splitter.
+     * Tracks single/double-quote string state, backslash escapes, doubled-quote
+     * escapes, ignores "-- " line comments (requires whitespace/EOL after --),
+     * and splits on ';' only when outside of a string literal.
+     *
+     * @return string[] Trimmed, non-empty statements.
+     */
+    public static function splitSqlStatements(string $sql): array
+    {
+        $statements = [];
+        $current = '';
+        $len = strlen($sql);
+
+        $inSingle = false; // inside '...'
+        $inDouble = false; // inside "..."
+        $inComment = false; // inside a -- ... line comment
+
+        for ($i = 0; $i < $len; $i++) {
+            $ch = $sql[$i];
+            $next = ($i + 1 < $len) ? $sql[$i + 1] : '';
+
+            if ($inComment) {
+                // Comment runs until end of line
+                if ($ch === "\n") {
+                    $inComment = false;
+                    $current .= $ch;
+                }
+                continue;
+            }
+
+            if ($inSingle) {
+                $current .= $ch;
+                if ($ch === '\\') {
+                    // Backslash escape: consume next char literally
+                    if ($next !== '') {
+                        $current .= $next;
+                        $i++;
+                    }
+                    continue;
+                }
+                if ($ch === "'") {
+                    if ($next === "'") {
+                        // Doubled-quote escape
+                        $current .= $next;
+                        $i++;
+                        continue;
+                    }
+                    $inSingle = false;
+                }
+                continue;
+            }
+
+            if ($inDouble) {
+                $current .= $ch;
+                if ($ch === '\\') {
+                    if ($next !== '') {
+                        $current .= $next;
+                        $i++;
+                    }
+                    continue;
+                }
+                if ($ch === '"') {
+                    if ($next === '"') {
+                        $current .= $next;
+                        $i++;
+                        continue;
+                    }
+                    $inDouble = false;
+                }
+                continue;
+            }
+
+            // Outside any string/comment
+
+            // Detect "-- " line comment: requires whitespace or EOL after --
+            if ($ch === '-' && $next === '-') {
+                $after = ($i + 2 < $len) ? $sql[$i + 2] : '';
+                if ($after === '' || $after === ' ' || $after === "\t" || $after === "\r" || $after === "\n") {
+                    $inComment = true;
+                    continue;
+                }
+            }
+
+            if ($ch === "'") {
+                $inSingle = true;
+                $current .= $ch;
+                continue;
+            }
+
+            if ($ch === '"') {
+                $inDouble = true;
+                $current .= $ch;
+                continue;
+            }
+
+            if ($ch === ';') {
+                $trimmed = trim($current);
+                if ($trimmed !== '') {
+                    $statements[] = $trimmed;
+                }
+                $current = '';
+                continue;
+            }
+
+            $current .= $ch;
+        }
+
+        $trimmed = trim($current);
+        if ($trimmed !== '') {
+            $statements[] = $trimmed;
+        }
+
+        return $statements;
+    }
+
+    /**
+     * Restore the database from a backup zip's database.sql entry.
+     * Writes a safety dump before applying any changes.
+     *
+     * @return array ['success' => bool, 'message' => string]
+     */
+    public function restoreDatabase(string $zipFilename): array
+    {
+        // Validate filename
+        $base = basename($zipFilename);
+        if (strpos($base, 'site_backup_') !== 0 || substr($base, -4) !== '.zip') {
+            return ['success' => false, 'message' => 'Tên file backup không hợp lệ.'];
+        }
+
+        $zipPath = $this->backupDir . $base;
+        if (!file_exists($zipPath)) {
+            return ['success' => false, 'message' => 'File backup không tồn tại.'];
+        }
+
+        if (!extension_loaded('zip')) {
+            return ['success' => false, 'message' => 'Thiếu PHP zip extension.'];
+        }
+
+        // Open zip and read database.sql
+        $zip = new ZipArchive();
+        if ($zip->open($zipPath) !== true) {
+            return ['success' => false, 'message' => 'Không thể mở file backup.'];
+        }
+        if (defined('BACKUP_PASSWORD')) {
+            $zip->setPassword(BACKUP_PASSWORD);
+        }
+        $sql = $zip->getFromName('database.sql');
+        $zip->close();
+
+        if ($sql === false || trim($sql) === '') {
+            return ['success' => false, 'message' => 'Không tìm thấy hoặc không đọc được database.sql trong backup.'];
+        }
+
+        // Safety dump BEFORE restoring
+        $safetyName = 'pre_restore_db_' . date('Y-m-d_H-i-s') . '.sql';
+        $safetyPath = $this->backupDir . $safetyName;
+        if (!$this->exportDatabase($safetyPath)) {
+            return ['success' => false, 'message' => 'Không thể tạo bản sao lưu an toàn trước khi khôi phục. Đã hủy.'];
+        }
+
+        $statements = self::splitSqlStatements($sql);
+
+        $executed = 0;
+        try {
+            $this->pdo->exec("SET FOREIGN_KEY_CHECKS=0");
+            foreach ($statements as $stmt) {
+                $this->pdo->exec($stmt);
+                $executed++;
+            }
+            $this->pdo->exec("SET FOREIGN_KEY_CHECKS=1");
+        } catch (Exception $e) {
+            // Re-enable FK checks; do not leave a silent half-restore unexplained
+            try {
+                $this->pdo->exec("SET FOREIGN_KEY_CHECKS=1");
+            } catch (Exception $ignore) {
+            }
+            return [
+                'success' => false,
+                'message' => 'Lỗi khi khôi phục: ' . $e->getMessage()
+                    . ' (đã thực thi ' . $executed . ' câu lệnh). Bản sao lưu an toàn: ' . $safetyName
+            ];
+        }
+
+        return [
+            'success' => true,
+            'message' => 'Khôi phục thành công ' . $executed . ' câu lệnh. Bản sao lưu an toàn: ' . $safetyName
+        ];
     }
 }

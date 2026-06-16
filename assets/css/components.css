@@ -214,7 +214,7 @@ a:not(.btn):not(.nav-link):not(.navbar-brand):not(.dropdown-item):not(.contact-b
 
 .post-content a:not(.btn),
 .service-content a:not(.btn),
-article a:not(.btn):not(.category-card-link) {
+.article-content a:not(.btn) {
     color: var(--primary-color);
     text-decoration: none;
     background-image: linear-gradient(var(--primary-color), var(--primary-color));
@@ -226,7 +226,7 @@ article a:not(.btn):not(.category-card-link) {
 
 .post-content a:not(.btn):hover,
 .service-content a:not(.btn):hover,
-article a:not(.btn):not(.category-card-link):hover {
+.article-content a:not(.btn):hover {
     background-size: 100% 2px;
     color: var(--hover-color);
 }

@@ -401,7 +401,23 @@ function create_slug($string)
 function is_admin_logged_in()
 {
     if (isset($_SESSION['user_id'], $_SESSION['user_role']) && $_SESSION['user_role'] === 'admin') {
-        return true;
+        // Hết hạn do không hoạt động (idle timeout 2 giờ): hủy phiên,
+        // vẫn cho phép remember-me khôi phục bên dưới nếu người dùng đã chọn.
+        $idleLimit = 7200;
+        $now = time();
+        $last = (int) ($_SESSION['admin_last_activity'] ?? 0);
+        if ($last > 0 && ($now - $last) > $idleLimit) {
+            unset(
+                $_SESSION['user_id'],
+                $_SESSION['username'],
+                $_SESSION['full_name'],
+                $_SESSION['user_role'],
+                $_SESSION['admin_last_activity']
+            );
+        } else {
+            $_SESSION['admin_last_activity'] = $now;
+            return true;
+        }
     }
 
     static $rememberAttempted = false;
@@ -462,6 +478,7 @@ function admin_set_login_session(array $user)
     $_SESSION['username'] = $user['username'];
     $_SESSION['full_name'] = $user['full_name'];
     $_SESSION['user_role'] = $user['role'];
+    $_SESSION['admin_last_activity'] = time();
 }
 
 function ensure_admin_remember_columns($pdo)
@@ -481,6 +498,31 @@ function ensure_admin_remember_columns($pdo)
         $pdo->exec("ALTER TABLE users ADD COLUMN remember_expires_at DATETIME DEFAULT NULL");
     }
 
+    $checked = true;
+}
+
+/**
+ * Bổ sung cột bảo mật cho bảng users (2FA + trạng thái + lần đăng nhập cuối).
+ * Idempotent — chỉ ALTER khi thiếu cột.
+ */
+function ensure_admin_security_columns($pdo)
+{
+    static $checked = false;
+    if ($checked || !($pdo instanceof PDO)) {
+        return;
+    }
+    if (!has_table_column($pdo, 'users', 'totp_secret')) {
+        $pdo->exec("ALTER TABLE users ADD COLUMN totp_secret VARCHAR(64) DEFAULT NULL");
+    }
+    if (!has_table_column($pdo, 'users', 'totp_enabled')) {
+        $pdo->exec("ALTER TABLE users ADD COLUMN totp_enabled TINYINT(1) NOT NULL DEFAULT 0");
+    }
+    if (!has_table_column($pdo, 'users', 'is_active')) {
+        $pdo->exec("ALTER TABLE users ADD COLUMN is_active TINYINT(1) NOT NULL DEFAULT 1");
+    }
+    if (!has_table_column($pdo, 'users', 'last_login_at')) {
+        $pdo->exec("ALTER TABLE users ADD COLUMN last_login_at DATETIME DEFAULT NULL");
+    }
     $checked = true;
 }
 
@@ -658,6 +700,103 @@ function admin_clear_login_attempts($pdo, $ipAddress)
 
     $stmt = $pdo->prepare("DELETE FROM admin_login_attempts WHERE ip_address = ?");
     $stmt->execute([$ipAddress]);
+}
+
+/**
+ * Throttle theo TÀI KHOẢN (chống brute-force đổi IP nhắm vào 1 username).
+ * Dùng chung bảng admin_login_attempts nhưng khóa bằng 'acct:'+hash(username),
+ * nên không bị traffic_normalize_ip_address (chỉ nhận IP thật) chặn.
+ */
+function admin_account_lock_key($username): string
+{
+    return 'acct:' . substr(hash('sha256', strtolower(trim((string) $username))), 0, 56);
+}
+
+function admin_account_rate_limit_status($pdo, $username, $windowSeconds = 900, $maxAttempts = 10)
+{
+    ensure_admin_login_rate_limit_table($pdo);
+    $status = ['blocked' => false, 'attempts' => 0, 'remaining_seconds' => 0];
+    $username = trim((string) $username);
+    if ($username === '') {
+        return $status;
+    }
+    $key = admin_account_lock_key($username);
+    $stmt = $pdo->prepare("SELECT attempts, window_started_at, locked_until FROM admin_login_attempts WHERE ip_address = ? LIMIT 1");
+    $stmt->execute([$key]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$row) {
+        return $status;
+    }
+    $now = time();
+    $lockedUntil = strtotime((string) ($row['locked_until'] ?? ''));
+    $windowStartedAt = strtotime((string) ($row['window_started_at'] ?? ''));
+    $attempts = (int) ($row['attempts'] ?? 0);
+    if ($lockedUntil > $now) {
+        $status['blocked'] = true;
+        $status['attempts'] = $attempts;
+        $status['remaining_seconds'] = $lockedUntil - $now;
+        return $status;
+    }
+    if ($windowStartedAt > 0 && ($now - $windowStartedAt) < (int) $windowSeconds) {
+        $status['attempts'] = $attempts;
+    }
+    return $status;
+}
+
+function admin_account_record_failed($pdo, $username, $windowSeconds = 900, $maxAttempts = 10)
+{
+    ensure_admin_login_rate_limit_table($pdo);
+    $username = trim((string) $username);
+    if ($username === '') {
+        return;
+    }
+    $key = admin_account_lock_key($username);
+    $stmt = $pdo->prepare("SELECT attempts, window_started_at, locked_until FROM admin_login_attempts WHERE ip_address = ? LIMIT 1");
+    $stmt->execute([$key]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    $nowTs = time();
+    $now = date('Y-m-d H:i:s', $nowTs);
+    $lockedUntil = null;
+    $attempts = 1;
+    $windowStartedAt = $now;
+
+    if ($row) {
+        $rowWindowStartedAt = strtotime((string) ($row['window_started_at'] ?? ''));
+        $rowLockedUntil = strtotime((string) ($row['locked_until'] ?? ''));
+        $rowAttempts = (int) ($row['attempts'] ?? 0);
+        if ($rowLockedUntil > $nowTs) {
+            $attempts = $rowAttempts;
+            $lockedUntil = date('Y-m-d H:i:s', $rowLockedUntil);
+            $windowStartedAt = $row['window_started_at'] ?? $now;
+        } elseif ($rowWindowStartedAt > 0 && ($nowTs - $rowWindowStartedAt) < (int) $windowSeconds) {
+            $attempts = $rowAttempts + 1;
+            $windowStartedAt = $row['window_started_at'] ?? $now;
+        }
+    }
+    if ($attempts >= (int) $maxAttempts && $lockedUntil === null) {
+        $lockedUntil = date('Y-m-d H:i:s', $nowTs + (int) $windowSeconds);
+    }
+    $sql = "INSERT INTO admin_login_attempts (ip_address, username_last, attempts, window_started_at, last_attempt_at, locked_until)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE
+                username_last = VALUES(username_last),
+                attempts = VALUES(attempts),
+                window_started_at = VALUES(window_started_at),
+                last_attempt_at = VALUES(last_attempt_at),
+                locked_until = VALUES(locked_until)";
+    $pdo->prepare($sql)->execute([$key, $username, $attempts, $windowStartedAt, $now, $lockedUntil]);
+}
+
+function admin_account_clear($pdo, $username)
+{
+    ensure_admin_login_rate_limit_table($pdo);
+    $username = trim((string) $username);
+    if ($username === '') {
+        return;
+    }
+    $stmt = $pdo->prepare("DELETE FROM admin_login_attempts WHERE ip_address = ?");
+    $stmt->execute([admin_account_lock_key($username)]);
 }
 
 function admin_restore_from_remember_cookie($pdo)

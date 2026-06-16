@@ -899,6 +899,13 @@ require_once '../includes/header.php';
                                             không cần query DB. Kiểm tra qua <strong>View Source</strong>:
                                             <code><!-- Page Cache: HIT/MISS --></code>
                                         </p>
+                                        <div class="mb-3" style="max-width: 320px;">
+                                            <label for="page_cache_ttl" class="form-label small fw-semibold mb-1">TTL (gi&#226;y)</label>
+                                            <input type="number" class="form-control form-control-sm" id="page_cache_ttl"
+                                                name="settings[page_cache_ttl]" min="30" max="86400" step="30"
+                                                value="<?php echo e($settings['page_cache_ttl'] ?? '300'); ?>">
+                                            <small class="text-muted">Th&#7901;i gian s&#7889;ng c&#7911;a cache. T&#7889;i thi&#7875;u 30, t&#7889;i &#273;a 86400 gi&#226;y (m&#7863;c &#273;&#7883;nh 300).</small>
+                                        </div>
                                         <?php if ($pc_stats['count'] > 0): ?>
                                             <div class="d-flex gap-3 flex-wrap">
                                                 <span class="badge bg-success-subtle text-success-emphasis border border-success-subtle">

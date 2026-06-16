@@ -5,13 +5,14 @@ require_once '../../config/database.php';
 require_once '../../includes/functions.php';
 
 $current_page = 'users';
+ensure_admin_security_columns($pdo);
 require_once '../includes/header.php';
 
 $success = $_GET['success'] ?? '';
 $error = $_GET['error'] ?? '';
 
 // Fetch all admin users
-$stmt = $pdo->query("SELECT id, username, full_name, email, created_at FROM users WHERE role = 'admin' ORDER BY id ASC");
+$stmt = $pdo->query("SELECT id, username, full_name, email, created_at, is_active, last_login_at, totp_enabled FROM users WHERE role = 'admin' ORDER BY id ASC");
 $users = $stmt->fetchAll();
 ?>
 
@@ -47,6 +48,14 @@ elseif ($error === 'last_admin'): ?>
         xóa — hệ thống phải có ít nhất 1 admin! <button type="button" class="btn-close"
             data-bs-dismiss="alert"></button></div>
     <?php
+elseif ($error === 'delete_failed'): ?>
+    <div class="alert alert-danger alert-dismissible fade show"><i class="bi bi-exclamation-triangle me-2"></i>Xóa tài
+        khoản thất bại do lỗi cơ sở dữ liệu. <button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>
+    <?php
+elseif ($error === 'not_found'): ?>
+    <div class="alert alert-warning alert-dismissible fade show"><i class="bi bi-exclamation-triangle me-2"></i>Không tìm
+        thấy tài khoản. <button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>
+    <?php
 endif; ?>
 
     <div class="card shadow-sm">
@@ -58,8 +67,10 @@ endif; ?>
                         <th>Tên đăng nhập</th>
                         <th>Họ và tên</th>
                         <th>Email</th>
-                        <th>Ngày tạo</th>
-                        <th style="width:160px">Thao tác</th>
+                        <th>2FA</th>
+                        <th>Trạng thái</th>
+                        <th>Đăng nhập cuối</th>
+                        <th style="width:200px">Thao tác</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -84,8 +95,22 @@ endif; ?>
                         <td>
                             <?php echo e($u['email'] ?? '—'); ?>
                         </td>
+                        <td>
+                            <?php if (!empty($u['totp_enabled'])): ?>
+                                <span class="badge bg-success"><i class="bi bi-shield-check"></i> Bật</span>
+                            <?php else: ?>
+                                <span class="badge bg-secondary">Tắt</span>
+                            <?php endif; ?>
+                        </td>
+                        <td>
+                            <?php if ((int) ($u['is_active'] ?? 1) === 1): ?>
+                                <span class="badge bg-success-subtle text-success border border-success-subtle">Hoạt động</span>
+                            <?php else: ?>
+                                <span class="badge bg-danger-subtle text-danger border border-danger-subtle">Đã khóa</span>
+                            <?php endif; ?>
+                        </td>
                         <td class="text-muted" style="font-size:0.85rem;">
-                            <?php echo $u['created_at'] ? date('d/m/Y H:i', strtotime($u['created_at'])) : '—'; ?>
+                            <?php echo !empty($u['last_login_at']) ? date('d/m/Y H:i', strtotime($u['last_login_at'])) : 'Chưa đăng nhập'; ?>
                         </td>
                         <td>
                             <a href="<?php echo BASE_URL; ?>admin/users/edit.php?id=<?php echo $u['id']; ?>"
@@ -93,6 +118,15 @@ endif; ?>
                                 <i class="bi bi-pencil"></i>
                             </a>
                             <?php if ($u['id'] != $_SESSION['user_id']): ?>
+                            <form method="POST" action="<?php echo BASE_URL; ?>admin/users/toggle-active.php" class="d-inline">
+                                <input type="hidden" name="csrf_token" value="<?php echo e(generate_csrf_token()); ?>">
+                                <input type="hidden" name="id" value="<?php echo (int) $u['id']; ?>">
+                                <?php if ((int) ($u['is_active'] ?? 1) === 1): ?>
+                                    <button type="submit" class="btn btn-sm btn-outline-warning me-1" title="Khóa tài khoản"><i class="bi bi-lock"></i></button>
+                                <?php else: ?>
+                                    <button type="submit" class="btn btn-sm btn-outline-success me-1" title="Mở khóa tài khoản"><i class="bi bi-unlock"></i></button>
+                                <?php endif; ?>
+                            </form>
                             <button type="button" class="btn btn-sm btn-outline-danger"
                                 onclick="confirmDelete(<?php echo $u['id']; ?>, '<?php echo e($u['username']); ?>')">
                                 <i class="bi bi-trash"></i>
@@ -105,7 +139,7 @@ endif; ?>
 endforeach; ?>
                     <?php if (empty($users)): ?>
                     <tr>
-                        <td colspan="6" class="text-center text-muted py-4">Chưa có tài khoản admin nào.</td>
+                        <td colspan="8" class="text-center text-muted py-4">Chưa có tài khoản admin nào.</td>
                     </tr>
                     <?php
 endif; ?>

@@ -32,15 +32,20 @@ try {
     $stmt->execute([$id]);
     $user = $stmt->fetch();
 
-    if ($user) {
-        $pdo->prepare("DELETE FROM users WHERE id = ?")->execute([$id]);
-        if (function_exists('log_activity')) {
-            log_activity('delete', 'user', $id, 'Xóa admin: ' . $user['username']);
-        }
+    if (!$user) {
+        header('Location: ' . BASE_URL . 'admin/users/index.php?error=not_found');
+        exit;
+    }
+
+    $pdo->prepare("DELETE FROM users WHERE id = ?")->execute([$id]);
+    if (function_exists('log_activity')) {
+        log_activity('delete', 'user', $id, 'Xóa admin: ' . $user['username']);
     }
 }
 catch (PDOException $e) {
-// Silently ignore
+    error_log('Delete user error: ' . $e->getMessage());
+    header('Location: ' . BASE_URL . 'admin/users/index.php?error=delete_failed');
+    exit;
 }
 
 header('Location: ' . BASE_URL . 'admin/users/index.php?success=deleted');

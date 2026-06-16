@@ -274,6 +274,20 @@ GZIP;
     ExpiresByType font/woff2 "access plus 1 year"
 </IfModule>
 CACHE;
+
+        $rules .= "\n\n";
+        $rules .= <<<'WEBP'
+# Serve WebP when browser supports it and a .webp twin exists
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteCond %{HTTP_ACCEPT} image/webp
+    RewriteCond %{DOCUMENT_ROOT}/$1.webp -f
+    RewriteRule ^(.+)\.(jpe?g|png)$ $1.webp [T=image/webp,E=accept:1,L]
+</IfModule>
+<IfModule mod_headers.c>
+    Header append Vary Accept env=REDIRECT_accept
+</IfModule>
+WEBP;
     }
 
     return $rules;

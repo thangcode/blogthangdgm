@@ -37,6 +37,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     elseif (!empty($password) && $password !== $confirm_password) {
         $error = 'Mật khẩu xác nhận không khớp.';
     }
+    elseif ($email !== '' && (function () use ($pdo, $email, $id) {
+        $c = $pdo->prepare("SELECT id FROM users WHERE email = ? AND id <> ? LIMIT 1");
+        $c->execute([$email, $id]);
+        return (bool) $c->fetch();
+    })()) {
+        $error = 'Email <strong>' . e($email) . '</strong> đã được dùng cho tài khoản khác.';
+    }
     else {
         try {
             $sql = "UPDATE users SET full_name = ?, email = ?";

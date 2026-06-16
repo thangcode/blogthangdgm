@@ -226,6 +226,11 @@ include '../includes/header.php';
                                                                 href="../ajax/backup.php?action=download&filename=<?php echo urlencode($backup['filename']); ?>"><i
                                                                     class="bi bi-download me-2 text-success"></i> Tải về</a>
                                                         </li>
+                                                        <li><a class="dropdown-item py-2 btn-restore-backup"
+                                                                href="javascript:void(0)"
+                                                                data-filename="<?php echo e($backup['filename']); ?>"><i
+                                                                    class="bi bi-arrow-counterclockwise me-2 text-primary"></i> Khôi phục</a>
+                                                        </li>
                                                         <li>
                                                             <hr class="dropdown-divider">
                                                         </li>
@@ -461,6 +466,38 @@ include '../includes/header.php';
                         } else {
                             if (window.AdminPopup) window.AdminPopup.error('Không thể xóa file');
                         }
+                    });
+            });
+        });
+
+        // Restore handling
+        document.querySelectorAll('.btn-restore-backup').forEach(btn => {
+            btn.addEventListener('click', function () {
+                const filename = this.dataset.filename;
+                if (!confirm('CẢNH BÁO: Khôi phục sẽ GHI ĐÈ toàn bộ cơ sở dữ liệu hiện tại bằng dữ liệu trong bản sao lưu này. Hành động này KHÔNG THỂ hoàn tác (ngoại trừ bản sao lưu an toàn được tạo tự động trước khi khôi phục).\n\nBạn có chắc chắn muốn tiếp tục?')) return;
+
+                fetch('../ajax/backup.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: new URLSearchParams({
+                        action: 'restore',
+                        filename: filename,
+                        csrf_token: AdminSecurity.csrfToken()
+                    }).toString()
+                })
+                    .then(r => r.json())
+                    .then(data => {
+                        if (window.AdminLoader) window.AdminLoader.hide();
+                        if (data.success) {
+                            if (window.AdminPopup) window.AdminPopup.success(data.message || 'Đã khôi phục cơ sở dữ liệu');
+                            setTimeout(() => location.reload(), 1500);
+                        } else {
+                            if (window.AdminPopup) window.AdminPopup.error(data.message || 'Không thể khôi phục');
+                        }
+                    })
+                    .catch(() => {
+                        if (window.AdminLoader) window.AdminLoader.hide();
+                        if (window.AdminPopup) window.AdminPopup.error('Lỗi kết nối server');
                     });
             });
         });

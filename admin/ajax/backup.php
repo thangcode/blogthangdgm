@@ -52,11 +52,40 @@ if ($action === 'create') {
     header('Content-Type: application/json');
     $status = $_SESSION['backup_status'] ?? ['message' => 'Đang chờ...', 'percent' => 0];
     echo json_encode($status);
+} elseif ($action === 'restore') {
+    header('Content-Type: application/json');
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        http_response_code(405);
+        echo json_encode(['success' => false, 'message' => 'Method not allowed.']);
+        exit;
+    }
+    require_valid_csrf_token(true);
+    // Restore can be heavy: allow more time and memory
+    set_time_limit(600);
+    ini_set('memory_limit', '512M');
+
+    $filename = $_POST['filename'] ?? '';
+    $result = $backupManager->restoreDatabase($filename);
+    if (!empty($result['success'])) {
+        // Flush page cache if available
+        $pageCacheFile = dirname(dirname(__DIR__)) . '/includes/page-cache.php';
+        if (file_exists($pageCacheFile)) {
+            require_once $pageCacheFile;
+            if (class_exists('PageCache')) {
+                PageCache::flush();
+            }
+        }
+        if (function_exists('log_activity')) {
+            log_activity('restore', 'backup', null, "Khôi phục cơ sở dữ liệu từ: $filename");
+        }
+    }
+    echo json_encode(['success' => !empty($result['success']), 'message' => $result['message'] ?? '']);
 } elseif ($action === 'download') {
     $filename = $_GET['filename'] ?? '';
+    $filename = basename($filename);
     $filePath = dirname(dirname(__DIR__)) . '/backups/' . $filename;
 
-    if (!empty($filename) && file_exists($filePath) && strpos($filename, '..') === false) {
+    if (strpos($filename, 'site_backup_') === 0 && substr($filename, -4) === '.zip' && file_exists($filePath)) {
         if (function_exists('log_activity')) {
             log_activity('download', 'backup', null, "Tải xuống bản sao lưu: $filename");
         }

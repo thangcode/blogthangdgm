@@ -15,7 +15,8 @@ $is_edit = false;
 
 $banner = [
     'id' => 0, 'title' => '', 'image_path' => '', 'mobile_image_path' => '',
-    'link_url' => '', 'slot' => '', 'sort_order' => 0, 'status' => 1,
+    'link_url' => '', 'link_follow' => 0, 'banner_type' => 'image', 'html_content' => '',
+    'slot' => '', 'sort_order' => 0, 'status' => 1,
     'start_at' => '', 'end_at' => '',
 ];
 
@@ -73,29 +74,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $status   = isset($_POST['status']) ? 1 : 0;
     $start_at = ad_parse_datetime($_POST['start_at'] ?? '');
     $end_at   = ad_parse_datetime($_POST['end_at'] ?? '');
+    $banner_type  = (($_POST['banner_type'] ?? 'image') === 'html') ? 'html' : 'image';
+    $html_content = trim((string) ($_POST['html_content'] ?? ''));
+    $link_follow  = ((int) ($_POST['link_follow'] ?? 0) === 1) ? 1 : 0;
 
     $banner = array_merge($banner, [
         'id' => $post_id, 'title' => $title, 'image_path' => $image, 'mobile_image_path' => $mobile,
-        'link_url' => $link_url, 'slot' => $slot, 'sort_order' => $sort, 'status' => $status,
+        'link_url' => $link_url, 'link_follow' => $link_follow, 'banner_type' => $banner_type, 'html_content' => $html_content,
+        'slot' => $slot, 'sort_order' => $sort, 'status' => $status,
         'start_at' => $start_at, 'end_at' => $end_at,
     ]);
 
     if ($title === '') $errors[] = 'Vui lòng nhập tiêu đề banner.';
     if (!is_valid_ad_slot($slot)) $errors[] = 'Vui lòng chọn vị trí hợp lệ.';
-    if (!ad_valid_image_path($image)) $errors[] = 'Vui lòng chọn ảnh desktop từ thư viện.';
-    if ($mobile !== '' && !ad_valid_image_path($mobile)) { $mobile = ''; $banner['mobile_image_path'] = ''; }
-    if (!ad_valid_link($link_url)) $errors[] = 'URL đích không hợp lệ (phải là http(s)://, đường dẫn nội bộ, hoặc #).';
+    if ($banner_type === 'html') {
+        if ($html_content === '') $errors[] = 'Vui lòng nhập nội dung HTML cho banner.';
+    } else {
+        if (!ad_valid_image_path($image)) $errors[] = 'Vui lòng chọn ảnh desktop từ thư viện.';
+        if ($mobile !== '' && !ad_valid_image_path($mobile)) { $mobile = ''; $banner['mobile_image_path'] = ''; }
+        if (!ad_valid_link($link_url)) $errors[] = 'URL đích không hợp lệ (phải là http(s)://, đường dẫn nội bộ, hoặc #).';
+    }
 
     if (empty($errors)) {
         try {
             if ($is_edit) {
-                $stmt = $pdo->prepare("UPDATE ad_banners SET title=?, image_path=?, mobile_image_path=?, link_url=?, slot=?, sort_order=?, status=?, start_at=?, end_at=? WHERE id=?");
-                $stmt->execute([$title, $image, $mobile, $link_url, $slot, $sort, $status, $start_at, $end_at, $post_id]);
+                $stmt = $pdo->prepare("UPDATE ad_banners SET title=?, image_path=?, mobile_image_path=?, link_url=?, link_follow=?, banner_type=?, html_content=?, slot=?, sort_order=?, status=?, start_at=?, end_at=? WHERE id=?");
+                $stmt->execute([$title, $image, $mobile, $link_url, $link_follow, $banner_type, $html_content, $slot, $sort, $status, $start_at, $end_at, $post_id]);
                 if (function_exists('log_activity')) log_activity('update', 'ad_banner', $post_id, "Cập nhật banner QC: $title");
                 $_SESSION['flash_success'] = 'Đã cập nhật banner quảng cáo.';
             } else {
-                $stmt = $pdo->prepare("INSERT INTO ad_banners (title, image_path, mobile_image_path, link_url, slot, sort_order, status, start_at, end_at) VALUES (?,?,?,?,?,?,?,?,?)");
-                $stmt->execute([$title, $image, $mobile, $link_url, $slot, $sort, $status, $start_at, $end_at]);
+                $stmt = $pdo->prepare("INSERT INTO ad_banners (title, image_path, mobile_image_path, link_url, link_follow, banner_type, html_content, slot, sort_order, status, start_at, end_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)");
+                $stmt->execute([$title, $image, $mobile, $link_url, $link_follow, $banner_type, $html_content, $slot, $sort, $status, $start_at, $end_at]);
                 $new_id = (int) $pdo->lastInsertId();
                 if (function_exists('log_activity')) log_activity('create', 'ad_banner', $new_id, "Thêm banner QC: $title");
                 $_SESSION['flash_success'] = 'Đã thêm banner quảng cáo.';
@@ -138,9 +147,27 @@ require_once '../includes/header.php';
                             <div class="form-text">Dùng để quản lý và làm thẻ alt cho ảnh.</div>
                         </div>
                         <div class="mb-3">
+                            <label class="form-label fw-bold d-block">Loại banner</label>
+                            <div class="btn-group" role="group" aria-label="Loại banner">
+                                <input type="radio" class="btn-check" name="banner_type" id="bt_image" value="image" autocomplete="off" <?php echo ($banner['banner_type'] ?? 'image') !== 'html' ? 'checked' : ''; ?>>
+                                <label class="btn btn-outline-primary" for="bt_image"><i class="bi bi-image me-1"></i>Ảnh</label>
+                                <input type="radio" class="btn-check" name="banner_type" id="bt_html" value="html" autocomplete="off" <?php echo ($banner['banner_type'] ?? 'image') === 'html' ? 'checked' : ''; ?>>
+                                <label class="btn btn-outline-primary" for="bt_html"><i class="bi bi-code-slash me-1"></i>HTML tùy chỉnh</label>
+                            </div>
+                        </div>
+                        <div id="bannerImageFields">
+                        <div class="mb-3">
                             <label class="form-label fw-bold">URL đích</label>
                             <input type="text" class="form-control" name="link_url" value="<?php echo e($banner['link_url']); ?>" placeholder="https://s.shopee.vn/... hoặc /danh-muc/...">
-                            <div class="form-text">Liên kết ngoài sẽ tự gắn <code>rel="nofollow sponsored"</code> và mở tab mới.</div>
+                            <div class="form-text">Liên kết đích khi người dùng bấm vào banner ảnh. Để trống hoặc <code>#</code> nếu không cần liên kết.</div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Thuộc tính liên kết (rel)</label>
+                            <select class="form-select" name="link_follow">
+                                <option value="0" <?php echo (int) ($banner['link_follow'] ?? 0) === 1 ? '' : 'selected'; ?>>Nofollow + Sponsored (khuyên dùng)</option>
+                                <option value="1" <?php echo (int) ($banner['link_follow'] ?? 0) === 1 ? 'selected' : ''; ?>>Follow (dofollow)</option>
+                            </select>
+                            <div class="form-text">Liên kết ngoài mặc định gắn <code>rel="nofollow sponsored"</code> và mở tab mới. Chọn Follow nếu muốn truyền link juice.</div>
                         </div>
                         <div class="row g-3">
                             <div class="col-md-6">
@@ -163,6 +190,12 @@ require_once '../includes/header.php';
                                     <img id="preview-mobile" src="<?php echo $banner['mobile_image_path'] ? e(BASE_URL . $banner['mobile_image_path']) : '#'; ?>" alt="" style="max-width:100%;max-height:140px;<?php echo $banner['mobile_image_path'] ? '' : 'display:none;'; ?>">
                                 </div>
                             </div>
+                        </div>
+                        </div><!-- /#bannerImageFields -->
+                        <div id="bannerHtmlFields" style="display:none;">
+                            <label class="form-label fw-bold">Nội dung HTML <span class="text-danger">*</span></label>
+                            <textarea id="html_content" name="html_content" rows="14"><?php echo e($banner['html_content'] ?? ''); ?></textarea>
+                            <div class="form-text">Soạn nội dung HTML tùy chỉnh hiển thị tại vị trí banner (text, liên kết, ảnh, bảng, mã nhúng...). Nội dung được render trực tiếp, không bọc khung ảnh/liên kết.</div>
                         </div>
                     </div>
                 </div>
@@ -242,6 +275,57 @@ require_once '../includes/header.php';
         }
     });
 })();
+
+// Chuyển đổi giữa banner Ảnh và HTML tùy chỉnh
+(function () {
+    var imageFields = document.getElementById('bannerImageFields');
+    var htmlFields = document.getElementById('bannerHtmlFields');
+    var imageInput = document.getElementById('image');
+    function applyType() {
+        var sel = document.querySelector('input[name="banner_type"]:checked');
+        var isHtml = sel && sel.value === 'html';
+        if (htmlFields) htmlFields.style.display = isHtml ? '' : 'none';
+        if (imageFields) imageFields.style.display = isHtml ? 'none' : '';
+        if (imageInput) {
+            if (isHtml) imageInput.removeAttribute('required');
+            else imageInput.setAttribute('required', 'required');
+        }
+    }
+    document.querySelectorAll('input[name="banner_type"]').forEach(function (r) {
+        r.addEventListener('change', applyType);
+    });
+    applyType();
+})();
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/tinymce@7/tinymce.min.js" referrerpolicy="origin"></script>
+<script>
+window.addEventListener('load', function () {
+    if (!window.tinymce) return;
+    tinymce.init({
+        selector: '#html_content', height: 380, menubar: false, branding: false, promotion: false,
+        license_key: 'gpl', convert_urls: false,
+        plugins: 'advlist autolink lists link image media table code fullscreen preview charmap',
+        toolbar: 'undo redo | blocks | bold italic underline forecolor | alignleft aligncenter alignright | bullist numlist | link image media table | removeformat code fullscreen preview',
+        valid_elements: '*[*]',
+        extended_valid_elements: 'div[*],span[*],a[*],b,i,svg[*],path[*]',
+        content_css: '/assets/css/blog.css?v=<?php echo @filemtime(__DIR__ . "/../../assets/css/blog.css") ?: time(); ?>',
+        content_style: 'body{font-family:Inter,sans-serif;font-size:16px;padding:14px}img{max-width:100%;height:auto}',
+        images_upload_handler: (blobInfo) => new Promise((resolve, reject) => {
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', '../ajax/summernote-upload.php');
+            xhr.setRequestHeader('X-CSRF-Token', document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '');
+            xhr.onload = () => {
+                if (xhr.status < 200 || xhr.status >= 300) { reject('HTTP ' + xhr.status); return; }
+                let j = null; try { j = JSON.parse(xhr.responseText); } catch (e) { reject('parse'); return; }
+                if (!j || !j.success || !j.url) { reject((j && j.message) || 'fail'); return; }
+                resolve(j.url);
+            };
+            xhr.onerror = () => reject('upload failed');
+            const fd = new FormData(); fd.append('file', blobInfo.blob(), blobInfo.filename()); xhr.send(fd);
+        })
+    });
+});
 </script>
 
 <?php require_once '../includes/footer.php'; ?>

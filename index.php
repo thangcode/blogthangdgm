@@ -13,10 +13,13 @@ require_once 'includes/widgets.php';
 
 $_cache_key = 'homepage';
 frontend_cache_prelude($pdo, $_cache_key, ['page_title' => $page_title ?? '']);
-if (PageCache::get($_cache_key)) {
-    exit;
+// Không phục vụ/không lưu cache khi có query-string (tránh cache biến thể ?p=...).
+if (empty($_GET)) {
+    if (PageCache::get($_cache_key)) {
+        exit;
+    }
+    PageCache::start($_cache_key);
 }
-PageCache::start($_cache_key);
 
 $seo_data = [
     'title'       => '',
@@ -113,4 +116,6 @@ if ($has_sidebar && !empty($content_blocks)) {
 }
 
 require_once 'includes/footer.php';
-PageCache::save();
+if (empty($_GET)) {
+    PageCache::save();
+}

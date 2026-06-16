@@ -32,6 +32,50 @@ class PageCache
     }
 
     /**
+     * TTL (giây) có thể cấu hình qua Admin Settings (setting: page_cache_ttl).
+     * Kẹp trong khoảng [30, 86400], mặc định 300. Cache static theo từng request.
+     */
+    private static function ttl(): int
+    {
+        static $ttl = null;
+        if ($ttl === null) {
+            $val = (int) get_setting('page_cache_ttl', '300');
+            if ($val < 30) {
+                $val = 30;
+            } elseif ($val > 86400) {
+                $val = 86400;
+            }
+            $ttl = $val;
+        }
+        return $ttl;
+    }
+
+    /**
+     * Đảm bảo thư mục cache tồn tại và luôn được bảo vệ:
+     * - mkdir đệ quy nếu chưa có
+     * - LUÔN ghi .htaccess chặn truy cập trực tiếp
+     * - ghi index.html rỗng nếu chưa có
+     */
+    private static function ensureGuard(): void
+    {
+        $dir = self::dir();
+        if (!is_dir($dir)) {
+            @mkdir($dir, 0755, true);
+        }
+
+        $htaccess = "Require all denied\n"
+                  . "<IfModule !mod_authz_core.c>\n"
+                  . "Deny from all\n"
+                  . "</IfModule>\n";
+        @file_put_contents($dir . DIRECTORY_SEPARATOR . '.htaccess', $htaccess);
+
+        $index = $dir . DIRECTORY_SEPARATOR . 'index.html';
+        if (!is_file($index)) {
+            @file_put_contents($index, '');
+        }
+    }
+
+    /**
      * Kiểm tra cache có đang bật không (đọc từ DB setting).
      */
     public static function isEnabled(): bool
@@ -78,7 +122,7 @@ class PageCache
             return false;
         }
 
-        return (time() - (int) filemtime($file)) < self::$ttl;
+        return (time() - (int) filemtime($file)) < self::ttl();
     }
 
     /**
@@ -107,7 +151,7 @@ class PageCache
         }
 
         $age = time() - (int) filemtime($file);
-        if ($age >= self::$ttl) {
+        if ($age >= self::ttl()) {
             @unlink($file);
             return false;
         }
@@ -115,7 +159,7 @@ class PageCache
         // ── CACHE HIT ──────────────────────────────────────────────────────
         $html = file_get_contents($file);
         // Gắn comment vào cuối để kiểm tra qua View Source
-        $comment = "\n<!-- Page Cache: HIT (age: {$age}s / ttl: " . self::$ttl . "s) -->";
+        $comment = "\n<!-- Page Cache: HIT (age: {$age}s / ttl: " . self::ttl() . "s) -->";
         echo $html . $comment;
         return true;
     }
@@ -147,17 +191,8 @@ class PageCache
 
         $html = ob_get_clean();
 
-        // Tạo thư mục nếu chưa có
-        $dir = self::dir();
-        if (!is_dir($dir)) {
-            @mkdir($dir, 0755, true);
-
-            // Block truy cập trực tiếp vào thư mục cache
-            @file_put_contents(
-                dirname($dir) . DIRECTORY_SEPARATOR . '.htaccess',
-                "Deny from all\n"
-            );
-        }
+        // Đảm bảo thư mục cache tồn tại và được bảo vệ
+        self::ensureGuard();
 
         $file = self::filePath(self::$currentKey);
         @file_put_contents($file, $html, LOCK_EX);
@@ -188,6 +223,8 @@ class PageCache
      */
     public static function flush(): int
     {
+        self::ensureGuard();
+
         $dir   = self::dir();
         $count = 0;
 
@@ -196,6 +233,10 @@ class PageCache
         }
 
         foreach (glob($dir . DIRECTORY_SEPARATOR . '*.html') ?: [] as $f) {
+            // Không xóa file bảo vệ index.html
+            if (basename($f) === 'index.html') {
+                continue;
+            }
             if (@unlink($f)) {
                 $count++;
             }
@@ -212,6 +253,10 @@ class PageCache
     {
         $dir   = self::dir();
         $files = is_dir($dir) ? (glob($dir . DIRECTORY_SEPARATOR . '*.html') ?: []) : [];
+        // Loại file bảo vệ index.html khỏi thống kê
+        $files = array_values(array_filter($files, static function ($f) {
+            return basename($f) !== 'index.html';
+        }));
 
         $totalSize  = 0;
         $oldestTime = time();

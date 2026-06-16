@@ -151,7 +151,7 @@
 .article-content li{margin-bottom:.45rem;}
 .article-content blockquote{border-left:4px solid var(--blog-primary);background:var(--blog-soft);padding:.9rem 1.1rem;border-radius:10px;margin:1.1rem 0;color:#334155;}
 .article-content .table-responsive{margin:1.25rem 0;}
-.article-content table{width:100%;border-collapse:collapse;border:1px solid #d9e2ff;border-radius:12px;overflow:hidden;}
+.article-content table{width:100%;border-collapse:collapse;border:1px solid #d9e2ff;border-radius:12px;overflow:hidden;display:block;overflow-x:auto;}
 .article-content th,.article-content td{border:1px solid #e9eefc;padding:.7rem .85rem;text-align:left;vertical-align:top;}
 .article-content th{background:#eef2ff;color:#312e81;font-weight:700;}
 .article-content pre{background:#0f172a;color:#e2e8f0;border-radius:12px;padding:1rem;overflow:auto;}
@@ -394,3 +394,7 @@
 .post-cta .cblk-btn--primary{animation-name:cblkRingW;}
 .cblk-btn[href^="tel:"] i{display:inline-block;transform-origin:center;animation:cblkShake 1.6s ease-in-out infinite;}
 @media(prefers-reduced-motion:reduce){.cblk-btn--primary,.cblk-btn--zalo,.cblk-btn[href^="tel:"] i{animation:none;}}
+. a r t i c l e - c o n t e n t  
+ i f r a m e  
+   m a x - w i d t h :   1 0 0 % ;    
+ 

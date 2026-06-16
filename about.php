@@ -36,7 +36,7 @@ require_once 'includes/header.php';
             </ol>
         </nav>
 
-        <div class="row justify-content-center g-5">
+        <div class="row justify-content-center g-4 g-lg-5">
             <div class="<?php echo $has_sidebar ? 'col-lg-8' : 'col-lg-9'; ?><?php echo $sb_left ? ' order-lg-2' : ''; ?>">
                 <article class="bg-white rounded-4 shadow-sm p-4 p-md-5">
                     <h1 class="fw-bold mb-4">Về <?php echo e($site_name); ?></h1>

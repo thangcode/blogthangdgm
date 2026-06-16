@@ -584,7 +584,7 @@ if (!isset($seo)) {
                         onmouseover="this.style.color='#6366f1';this.style.background='#32373c'"
                         onmouseout="this.style.color='#c3c4c7';this.style.background='transparent'">
                         <i class="bi bi-grid-fill" style="font-size:14px;"></i>
-                        <span
+                        <span class="wp-adminbar-text"
                             style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"><?php echo e($site_name); ?></span>
                     </a>
 
@@ -598,7 +598,7 @@ if (!isset($seo)) {
                             style="color:#c3c4c7;text-decoration:none;padding:0 8px;height:32px;display:flex;align-items:center;gap:5px;transition:color .1s,background .1s;"
                             onmouseover="this.style.color='#6366f1';this.style.background='#32373c'"
                             onmouseout="this.style.color='#c3c4c7';this.style.background='transparent'">
-                            <i class="bi bi-pencil-square" style="font-size:12px;"></i> Sửa sản phẩm
+                            <i class="bi bi-pencil-square" style="font-size:12px;"></i> <span class="wp-adminbar-text">Sửa sản phẩm</span>
                         </a>
                     <?php endif; ?>
 
@@ -608,7 +608,7 @@ if (!isset($seo)) {
                             style="color:#c3c4c7;text-decoration:none;padding:0 8px;height:32px;display:flex;align-items:center;gap:5px;transition:color .1s,background .1s;"
                             onmouseover="this.style.color='#6366f1';this.style.background='#32373c'"
                             onmouseout="this.style.color='#c3c4c7';this.style.background='transparent'">
-                            <i class="bi bi-pencil-square" style="font-size:12px;"></i> Sửa danh mục
+                            <i class="bi bi-pencil-square" style="font-size:12px;"></i> <span class="wp-adminbar-text">Sửa danh mục</span>
                         </a>
                     <?php endif; ?>
 
@@ -618,7 +618,7 @@ if (!isset($seo)) {
                             style="color:#c3c4c7;text-decoration:none;padding:0 8px;height:32px;display:flex;align-items:center;gap:5px;transition:color .1s,background .1s;"
                             onmouseover="this.style.color='#6366f1';this.style.background='#32373c'"
                             onmouseout="this.style.color='#c3c4c7';this.style.background='transparent'">
-                            <i class="bi bi-pencil-square" style="font-size:12px;"></i> Sửa bài viết
+                            <i class="bi bi-pencil-square" style="font-size:12px;"></i> <span class="wp-adminbar-text">Sửa bài viết</span>
                         </a>
                     <?php endif; ?>
 
@@ -628,8 +628,7 @@ if (!isset($seo)) {
                             style="color:#c3c4c7;text-decoration:none;padding:0 8px;height:32px;display:flex;align-items:center;gap:5px;transition:color .1s,background .1s;"
                             onmouseover="this.style.color='#6366f1';this.style.background='#32373c'"
                             onmouseout="this.style.color='#c3c4c7';this.style.background='transparent'">
-                            <i class="bi bi-grid-3x3-gap-fill" style="font-size:13px;"></i> Quản lý
-                            <i class="bi bi-chevron-down" style="font-size:9px;opacity:.7;"></i>
+                            <i class="bi bi-grid-3x3-gap-fill" style="font-size:13px;"></i> <span class="wp-adminbar-text">Quản lý <i class="bi bi-chevron-down" style="font-size:9px;opacity:.7;"></i></span>
                         </a>
                         <div id="wp-quick-actions-dropdown"
                             style="display:none;position:absolute;top:32px;left:0;width:220px;background:#2c3338;box-shadow:0 8px 20px rgba(0,0,0,.35);border-radius:0 0 8px 8px;padding:8px;z-index:999999;border:1px solid #3c434a;border-top:2px solid #6366f1;">
@@ -699,7 +698,7 @@ if (!isset($seo)) {
                             style="color:#c3c4c7;text-decoration:none;padding:0 8px;height:32px;display:flex;align-items:center;gap:5px;transition:color .1s,background .1s;"
                             onmouseover="this.style.color='#6366f1';this.style.background='#32373c'"
                             onmouseout="this.style.color='#c3c4c7';this.style.background='transparent'">
-                            <i class="bi bi-file-earmark-arrow-down" style="font-size:13px;"></i> Lead tài liệu
+                            <i class="bi bi-file-earmark-arrow-down" style="font-size:13px;"></i> <span class="wp-adminbar-text">Lead tài liệu</span>
                             <?php
                             try {
                                 $pending_stmt = $pdo->query("SELECT COUNT(*) FROM document_requests WHERE status = 'failed'");
@@ -720,7 +719,7 @@ if (!isset($seo)) {
                         onmouseover="this.style.color='#6366f1';this.style.background='#32373c'"
                         onmouseout="this.style.color='#c3c4c7';this.style.background='transparent'"
                         onclick="event.preventDefault();wpClearCache(this);">
-                        <i class="bi bi-arrow-clockwise" style="font-size:13px;"></i> Xóa cache
+                        <i class="bi bi-arrow-clockwise" style="font-size:13px;"></i> <span class="wp-adminbar-text">Xóa cache</span>
                     </a>
                 </div>
 
@@ -728,7 +727,7 @@ if (!isset($seo)) {
                 <div style="margin-left:auto;display:flex;align-items:center;">
                     <span style="color:#c3c4c7;padding:0 8px;display:flex;align-items:center;gap:5px;">
                         <i class="bi bi-person-circle" style="font-size:14px;"></i>
-                        <?php echo e($_SESSION['username'] ?? 'Admin'); ?>
+                        <span class="wp-adminbar-text"><?php echo e($_SESSION['username'] ?? 'Admin'); ?></span>
                     </span>
                     <a href="<?php echo BASE_URL; ?>admin/logout.php" title="Đăng xuất"
                         style="color:#c3c4c7;text-decoration:none;padding:0 8px;height:32px;display:flex;align-items:center;gap:5px;transition:color .1s,background .1s;"
@@ -743,9 +742,32 @@ if (!isset($seo)) {
             body {
                 padding-top: 32px !important;
             }
-
             .navbar.sticky-top {
-                top: 32px;
+                top: 32px !important;
+            }
+            
+            @media (max-width: 768px) {
+                #wpadminbar {
+                    position: fixed !important;
+                    height: 32px !important;
+                    padding-bottom: 0;
+                }
+                #wpadminbar > div {
+                    flex-wrap: nowrap !important;
+                    overflow-x: auto !important;
+                    overflow-y: visible !important;
+                    -webkit-overflow-scrolling: touch;
+                }
+                #wpadminbar > div::-webkit-scrollbar {
+                    display: none;
+                }
+                #wpadminbar > div > div {
+                    flex-wrap: nowrap !important;
+                    white-space: nowrap !important;
+                }
+                #wpadminbar .wp-adminbar-text {
+                    display: inline !important;
+                }
             }
 
             #wp-registrations-item:hover #wp-registrations-dropdown {

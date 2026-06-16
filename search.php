@@ -75,7 +75,7 @@ require_once 'includes/header.php';
             </div>
         </form>
 
-        <div class="row g-5">
+        <div class="row g-4 g-lg-5">
             <div class="<?php echo $has_sidebar ? 'col-lg-8' : 'col-12'; ?><?php echo $sb_left ? ' order-lg-2' : ''; ?>">
                 <?php if ($q !== '' && empty($posts)): ?>
                     <div class="text-center text-muted py-5">

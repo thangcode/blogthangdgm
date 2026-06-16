@@ -72,7 +72,7 @@ require_once 'includes/header.php';
             </ol>
         </nav>
 
-        <div class="row g-5<?php echo $has_sidebar ? '' : ' justify-content-center'; ?>">
+        <div class="row g-4 g-lg-5<?php echo $has_sidebar ? '' : ' justify-content-center'; ?>">
             <div class="<?php echo $has_sidebar ? 'col-lg-9' : 'col-12'; ?><?php echo $sb_left ? ' order-lg-2' : ''; ?>">
                 <article>
                     <header class="mb-4">

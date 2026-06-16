@@ -9,7 +9,7 @@ $doc_label = $post['document_name'] ?? 'tài liệu';
         <div class="document-form__icon"><i class="bi bi-file-earmark-arrow-down-fill"></i></div>
         <div class="document-form__head">
             <h3 id="docFormTitle">Nhận tài liệu miễn phí</h3>
-            <p>Nhập họ tên &amp; email, hệ thống sẽ gửi <strong><?php echo e($doc_label); ?></strong> về hộp thư của bạn ngay.</p>
+            <p>Nhập họ tên &amp; email, hệ thống sẽ gửi <strong>tài liệu</strong> về hộp thư của bạn ngay.</p>
         </div>
         <form id="docRequestForm" class="document-form__form" novalidate>
             <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">

@@ -22,6 +22,7 @@
 body {
     font-family: 'Montserrat', sans-serif;
     color: var(--text-color);
+    overflow-x: clip;
 }
 
 .text-primary {
@@ -689,5 +690,28 @@ body {
         display: flex !important;
         width: 100% !important;
         max-width: none !important;
+    }
+
+    .nav-premium-nav .brand-text {
+        font-size: 1.05rem !important;
+    }
+
+    .nav-premium-nav .navbar-brand img {
+        height: 38px;
+    }
+
+    @media (max-width: 575.98px) {
+        .nav-premium-nav .brand-text {
+            font-size: 0.85rem !important;
+        }
+        .nav-premium-nav .navbar-brand img {
+            height: 34px;
+        }
+    }
+
+    @media (max-width: 360px) {
+        .nav-premium-nav .brand-text {
+            font-size: 0.78rem !important;
+        }
     }
 }

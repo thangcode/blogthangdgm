@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // admin/includes/admin-bar.php
 // Quick Action Bar (WordPress-style)
 
@@ -18,7 +18,7 @@ if (!isset($site_name))
                 onmouseover="this.style.color='#00b9eb';this.style.background='#32373c'"
                 onmouseout="this.style.color='#c3c4c7';this.style.background='transparent'">
                 <i class="bi bi-grid-fill" style="font-size:14px;"></i>
-                <span style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+                <span class="wp-adminbar-text" style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
                     <?php echo htmlspecialchars($site_name); ?>
                 </span>
             </a>
@@ -34,7 +34,7 @@ if (!isset($site_name))
                     style="color:#c3c4c7;text-decoration:none;padding:0 8px;height:32px;display:flex;align-items:center;gap:5px;transition:color .1s,background .1s;"
                     onmouseover="this.style.color='#00b9eb';this.style.background='#32373c'"
                     onmouseout="this.style.color='#c3c4c7';this.style.background='transparent'">
-                    <i class="bi bi-pencil-square" style="font-size:12px;"></i> Sửa dịch vụ
+                    <i class="bi bi-pencil-square" style="font-size:12px;"></i> <span class="wp-adminbar-text">Sửa dịch vụ</span>
                 </a>
             <?php endif; ?>
 
@@ -44,7 +44,7 @@ if (!isset($site_name))
                     style="color:#c3c4c7;text-decoration:none;padding:0 8px;height:32px;display:flex;align-items:center;gap:5px;transition:color .1s,background .1s;"
                     onmouseover="this.style.color='#00b9eb';this.style.background='#32373c'"
                     onmouseout="this.style.color='#c3c4c7';this.style.background='transparent'">
-                    <i class="bi bi-pencil-square" style="font-size:12px;"></i> Sửa danh mục
+                    <i class="bi bi-pencil-square" style="font-size:12px;"></i> <span class="wp-adminbar-text">Sửa danh mục</span>
                 </a>
             <?php endif; ?>
 
@@ -54,7 +54,7 @@ if (!isset($site_name))
                     style="color:#c3c4c7;text-decoration:none;padding:0 8px;height:32px;display:flex;align-items:center;gap:5px;transition:color .1s,background .1s;"
                     onmouseover="this.style.color='#00b9eb';this.style.background='#32373c'"
                     onmouseout="this.style.color='#c3c4c7';this.style.background='transparent'">
-                    <i class="bi bi-pencil-square" style="font-size:12px;"></i> Sửa bài viết
+                    <i class="bi bi-pencil-square" style="font-size:12px;"></i> <span class="wp-adminbar-text">Sửa bài viết</span>
                 </a>
             <?php endif; ?>
 
@@ -64,8 +64,7 @@ if (!isset($site_name))
                     style="color:#c3c4c7;text-decoration:none;padding:0 8px;height:32px;display:flex;align-items:center;gap:5px;transition:color .1s,background .1s;"
                     onmouseover="this.style.color='#00b9eb';this.style.background='#32373c'"
                     onmouseout="this.style.color='#c3c4c7';this.style.background='transparent'">
-                    <i class="bi bi-grid-3x3-gap-fill" style="font-size:13px;"></i> Quản lý
-                    <i class="bi bi-chevron-down" style="font-size:9px;opacity:.7;"></i>
+                    <i class="bi bi-grid-3x3-gap-fill" style="font-size:13px;"></i> <span class="wp-adminbar-text">Quản lý <i class="bi bi-chevron-down" style="font-size:9px;opacity:.7;"></i></span>
                 </a>
                 <div id="wp-quick-actions-dropdown"
                     style="display:none;position:absolute;top:32px;left:0;width:220px;background:#2c3338;box-shadow:0 8px 20px rgba(0,0,0,.35);border-radius:0 0 8px 8px;padding:8px;z-index:999999;border:1px solid #3c434a;border-top:2px solid #6366f1;">
@@ -199,7 +198,7 @@ if (!isset($site_name))
                     style="color:#c3c4c7;text-decoration:none;padding:0 8px;height:32px;display:flex;align-items:center;gap:5px;transition:color .1s,background .1s;"
                     onmouseover="this.style.color='#00b9eb';this.style.background='#32373c'"
                     onmouseout="this.style.color='#c3c4c7';this.style.background='transparent'">
-                    <i class="bi bi-person-lines-fill" style="font-size:13px;"></i> Liên hệ
+                    <i class="bi bi-person-lines-fill" style="font-size:13px;"></i> <span class="wp-adminbar-text">Liên hệ</span>
                     <?php
                     try {
                         global $pdo;
@@ -237,7 +236,7 @@ if (!isset($site_name))
                 onmouseover="this.style.color='#00b9eb';this.style.background='#32373c'"
                 onmouseout="this.style.color='#c3c4c7';this.style.background='transparent'"
                 onclick="wpClearAdminCache(event);">
-                <i class="bi bi-arrow-clockwise" style="font-size:13px;"></i> Xóa cache
+                <i class="bi bi-arrow-clockwise" style="font-size:13px;"></i> <span class="wp-adminbar-text">Xóa cache</span>
             </a>
         </div>
 
@@ -245,7 +244,7 @@ if (!isset($site_name))
         <div style="margin-left:auto;display:flex;align-items:center;">
             <span style="color:#c3c4c7;padding:0 8px;display:flex;align-items:center;gap:5px;">
                 <i class="bi bi-person-circle" style="font-size:14px;"></i>
-                <?php echo htmlspecialchars($_SESSION['username'] ?? 'Admin'); ?>
+                <span class="wp-adminbar-text"><?php echo htmlspecialchars($_SESSION['username'] ?? 'Admin'); ?></span>
             </span>
             <a href="<?php echo BASE_URL; ?>admin/logout.php" title="Đăng xuất"
                 style="color:#c3c4c7;text-decoration:none;padding:0 8px;height:32px;display:flex;align-items:center;gap:5px;transition:color .1s,background .1s;"
@@ -257,6 +256,8 @@ if (!isset($site_name))
     </div>
 </div>
 <style>
+
+
     /* Adjust Admin Layout for Fixed Top Bar */
     body {
         padding-top: 32px !important;

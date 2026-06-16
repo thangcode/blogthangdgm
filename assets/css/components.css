@@ -25,9 +25,11 @@ img.lazy-img.lazy-loaded {
     border-radius: 50px;
     padding: 10px 20px;
     margin-bottom: 1.5rem;
-    display: inline-flex;
+    display: flex;
+    flex-wrap: wrap;
     align-items: center;
     box-shadow: 0 2px 12px rgba(99, 102, 241, 0.06);
+    max-width: 100%;
 }
 
 .breadcrumb-premium .breadcrumb {

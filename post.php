@@ -130,14 +130,12 @@ require_once 'includes/header.php';
             <ol class="breadcrumb">
                 <li class="breadcrumb-item"><a href="<?php echo BASE_URL; ?>"><i class="bi bi-house-door-fill"></i> Trang chủ</a></li>
                 <?php if ($primary_cat): ?>
-                    <li class="breadcrumb-item"><a href="<?php echo categoryUrl($primary_cat['slug']); ?>"><?php echo e($primary_cat['name']); ?></a></li>
-                <?php else: ?>
-                    <li class="breadcrumb-item active" aria-current="page"><?php echo e(mb_substr($post['title'], 0, 40, 'UTF-8')); ?></li>
+                    <li class="breadcrumb-item active" aria-current="page"><a href="<?php echo categoryUrl($primary_cat['slug']); ?>"><?php echo e($primary_cat['name']); ?></a></li>
                 <?php endif; ?>
             </ol>
         </nav>
 
-        <div class="row justify-content-center g-5">
+        <div class="row justify-content-center g-4 g-lg-5">
             <div class="col-lg-9<?php echo $sb_left ? ' order-lg-2' : ''; ?>">
                 <article>
                     <header class="mb-4">

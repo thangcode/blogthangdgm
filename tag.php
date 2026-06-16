@@ -88,7 +88,7 @@ require_once 'includes/header.php';
             <span class="archive-count"><?php echo number_format($total); ?> bài viết</span>
         </header>
 
-        <div class="row g-5">
+        <div class="row g-4 g-lg-5">
             <div class="<?php echo $has_sidebar ? 'col-lg-8' : 'col-12'; ?><?php echo $sb_left ? ' order-lg-2' : ''; ?>">
                 <?php if (!empty($posts)): ?>
                     <div class="row g-4">

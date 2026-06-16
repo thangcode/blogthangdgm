@@ -70,7 +70,7 @@ if (!function_exists('ad_slots')) {
             'product_below_content' => ['label' => 'Sản phẩm - Dưới nội dung', 'desc' => 'Ngay dưới phần mô tả chi tiết sản phẩm', 'multi' => false, 'size' => '728 × 200px (ngang)'],
             'post_above_content'    => ['label' => 'Bài viết - Trên nội dung', 'desc' => 'Hiển thị phía trên nội dung bài viết, sau phần tiêu đề/thumbnail', 'multi' => false, 'size' => '728 × 200px (ngang)'],
             'post_inline'           => ['label' => 'Bài viết - Trong bài', 'desc' => 'Chèn trong/đầu bài viết', 'multi' => false, 'size' => '728 × 200px (ngang)'],
-            'post_below_content'    => ['label' => 'Bài viết - Dưới nội dung', 'desc' => 'Hiển thị ngay dưới nội dung chính của bài viết', 'multi' => false, 'size' => '728 × 200px (ngang)'],
+            'post_below_content'    => ['label' => 'Bài viết - Dưới nội dung', 'desc' => 'Hiển thị ngay dưới nội dung chính của bài viết (cho phép nhiều banner xếp chồng)', 'multi' => true, 'size' => '728 × 200px (ngang)'],
             'post_sidebar'          => ['label' => 'Bài viết - Cột bên', 'desc' => 'Cột sidebar trang chi tiết bài viết', 'multi' => true, 'size' => '300 × 250px hoặc 300 × 600px (dọc/vuông) — WP cũ dùng 800×200'],
             'sticky_bottom'         => ['label' => 'Dính đáy màn hình', 'desc' => 'Dải quảng cáo dính đáy, có nút đóng', 'multi' => false, 'size' => '970 × 90px (ngang, mỏng) — mobile nên có ảnh 320 × 100px'],
         ];

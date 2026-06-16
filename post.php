@@ -131,8 +131,9 @@ require_once 'includes/header.php';
                 <li class="breadcrumb-item"><a href="<?php echo BASE_URL; ?>"><i class="bi bi-house-door-fill"></i> Trang chủ</a></li>
                 <?php if ($primary_cat): ?>
                     <li class="breadcrumb-item"><a href="<?php echo categoryUrl($primary_cat['slug']); ?>"><?php echo e($primary_cat['name']); ?></a></li>
+                <?php else: ?>
+                    <li class="breadcrumb-item active" aria-current="page"><?php echo e(mb_substr($post['title'], 0, 40, 'UTF-8')); ?></li>
                 <?php endif; ?>
-                <li class="breadcrumb-item active" aria-current="page"><?php echo e(mb_substr($post['title'], 0, 60, 'UTF-8')); ?></li>
             </ol>
         </nav>
 

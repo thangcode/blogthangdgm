@@ -60,7 +60,12 @@ $v = fn($k) => e($_POST[$k] ?? ($page[$k] ?? ''));
 <div class="container-fluid">
     <div class="d-flex justify-content-between align-items-center pt-3 pb-2 mb-3 border-bottom">
         <h1 class="h2"><?php echo $is_edit ? 'Sửa trang' : 'Thêm trang'; ?></h1>
-        <a href="index.php" class="btn btn-outline-secondary"><i class="bi bi-arrow-left"></i> Quay lại</a>
+        <div>
+            <?php if ($is_edit): ?>
+            <a href="<?php echo BASE_URL . ltrim($page['slug'] ?? '', '/'); ?>/" target="_blank" class="btn btn-outline-primary me-2"><i class="bi bi-eye"></i> Xem trang</a>
+            <?php endif; ?>
+            <a href="index.php" class="btn btn-outline-secondary"><i class="bi bi-arrow-left"></i> Quay lại</a>
+        </div>
     </div>
     <?php if ($error): ?><div class="alert alert-danger"><?php echo e($error); ?></div><?php endif; ?>
     <?php if ($success): ?><div class="alert alert-success"><?php echo $success; ?></div><?php endif; ?>

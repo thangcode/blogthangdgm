@@ -391,9 +391,9 @@ if (!function_exists('ai_rewrite_blog_post')) {
         $content = preg_replace('/^```[a-z]*\s*|\s*```$/i', '', $content);
         $content = preg_replace('#<(/?)h1(\s[^>]*)?>#i', '<$1h2$2>', $content); // ép H1 -> H2
 
-        // Giữ lại video YouTube ở đầu bài nếu bài gốc có
+        // Giữ lại video YouTube ở cuối bài nếu bài gốc có.
         if ($youtubeId !== '' && function_exists('blog_youtube_iframe')) {
-            $content = blog_youtube_iframe($youtubeId) . "\n" . $content;
+            $content = rtrim($content) . "\n" . blog_youtube_iframe($youtubeId);
         }
 
         return [

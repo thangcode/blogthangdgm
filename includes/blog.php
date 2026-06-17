@@ -236,7 +236,7 @@ function blog_youtube_id(string $url): ?string
     $patterns = [
         '~youtu\.be/([A-Za-z0-9_-]{11})~i',
         '~youtube\.com/watch\?(?:[^"\s]*&)?v=([A-Za-z0-9_-]{11})~i',
-        '~youtube\.com/embed/([A-Za-z0-9_-]{11})~i',
+        '~youtube(?:-nocookie)?\.com/embed/([A-Za-z0-9_-]{11})~i',
         '~youtube\.com/shorts/([A-Za-z0-9_-]{11})~i',
     ];
     foreach ($patterns as $re) {
@@ -280,7 +280,7 @@ function blog_demote_headings(string $html): string
 function blog_extract_youtube_id(string $html): ?string
 {
     if ($html === '' || stripos($html, 'youtu') === false) return null;
-    if (preg_match('~(?:youtu\.be/|youtube\.com/(?:watch\?(?:[^"\s]*&)?v=|embed/|shorts/))([A-Za-z0-9_-]{11})~i', html_entity_decode($html, ENT_QUOTES | ENT_HTML5, 'UTF-8'), $m)) {
+    if (preg_match('~(?:youtu\.be/|youtube(?:-nocookie)?\.com/(?:watch\?(?:[^"\s]*&)?v=|embed/|shorts/))([A-Za-z0-9_-]{11})~i', html_entity_decode($html, ENT_QUOTES | ENT_HTML5, 'UTF-8'), $m)) {
         return $m[1];
     }
     return null;

@@ -30,6 +30,16 @@ try {
     $log_path = '/' . ltrim($parsed_path ?? '', '/');
     
     if ($log_path !== '/' && $log_path !== '') {
+        // --- AUTO-REDIRECT CHECK ---
+        // If a 404 is triggered but the URL is in slug_redirects, we redirect instead of 404-ing
+        $redir_stmt = $pdo->prepare("SELECT new_path FROM slug_redirects WHERE old_path = ? OR old_path = ? LIMIT 1");
+        $redir_stmt->execute([$log_path, rtrim($log_path, '/')]);
+        $new_url = $redir_stmt->fetchColumn();
+        if ($new_url) {
+            header('Location: ' . $new_url, true, 301);
+            exit;
+        }
+
         $stmt = $pdo->prepare("INSERT INTO error_404_logs (path, hits, last_seen) VALUES (?, 1, NOW()) ON DUPLICATE KEY UPDATE hits = hits + 1, last_seen = NOW()");
         $stmt->execute([$log_path]);
     }

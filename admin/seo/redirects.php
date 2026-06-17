@@ -325,7 +325,7 @@ require_once '../includes/header.php';
                                                         'post'     => ['bg-info',      'Bài viết'],
                                                         'custom'   => ['bg-secondary', 'Thủ công'],
                                                     ];
-                                                    $tb = $type_badges[$r['entity_type']] ?? ['bg-dark', $r['entity_type']];
+                                                    $tb = $type_badges[$r['entity_type']] ?? ['bg-secondary', 'Thủ công'];
                                                     ?>
                                                     <span class="badge <?php echo $tb[0]; ?>"><?php echo $tb[1]; ?></span>
                                                 </td>

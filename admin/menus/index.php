@@ -103,6 +103,7 @@ function render_admin_menu_items(array $items)
         }
         echo '<button type="button" class="btn btn-sm btn-outline-primary edit-menu-btn"><i class="bi bi-pencil-square"></i></button>';
         echo '<form method="POST" class="d-inline" data-confirm="&#88;&#243;a menu n&#224;y? Menu con s&#7869; &#273;&#432;&#7907;c &#273;&#432;a l&#234;n c&#7845;p g&#7889;c." data-confirm-title="X&#243;a menu" data-confirm-ok="X&#243;a ngay" data-confirm-class="btn-danger">';
+        echo '<input type="hidden" name="csrf_token" value="' . e(generate_csrf_token()) . '">';
         echo '<input type="hidden" name="action" value="delete_item">';
         echo '<input type="hidden" name="position" value="' . $position . '">';
         echo '<input type="hidden" name="id" value="' . $id . '">';

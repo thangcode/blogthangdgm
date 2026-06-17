@@ -179,7 +179,7 @@ $custom_script_footer = filter_public_custom_script_markup(get_setting('custom_s
 </div>
 
 <!-- Contact Confirm Modal -->
-<div class="contact-confirm-overlay" id="contactConfirmOverlay" onclick="closeContactConfirm(event)">
+<div class="contact-confirm-overlay" id="contactConfirmOverlay" onclick="closeContactConfirm(event)" hidden>
     <div class="contact-confirm-card" onclick="event.stopPropagation()">
         <div class="confirm-header">
             <div class="confirm-icon-wrap" id="confirmIcon"></div>
@@ -842,6 +842,10 @@ $needs_locations_js = !empty($GLOBALS['require_locations_js']);
         transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     }
 
+    .contact-confirm-overlay[hidden] {
+        display: none !important;
+    }
+
     .contact-confirm-overlay.active {
         opacity: 1;
         visibility: visible;
@@ -1117,12 +1121,17 @@ $needs_locations_js = !empty($GLOBALS['require_locations_js']);
 
         // Close floating menu rồi show overlay
         closeContactMenu();
+        overlay.removeAttribute('hidden');
         overlay.classList.add('active');
     }
 
     function closeContactConfirm(e) {
         if (e && e.target !== e.currentTarget) return;
-        document.getElementById('contactConfirmOverlay').classList.remove('active');
+        const overlay = document.getElementById('contactConfirmOverlay');
+        if (overlay) {
+            overlay.classList.remove('active');
+            overlay.setAttribute('hidden', '');
+        }
         pendingAction = null;
     }
 

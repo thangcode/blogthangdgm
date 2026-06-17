@@ -28,10 +28,18 @@ if (empty($homepage_blocks)) {
 }
 
 $GLOBALS['require_swiper_assets'] = false;
+$has_hero_block = false;
 foreach ($homepage_blocks as $b) {
     if (($b['block_key'] ?? '') === 'hero') {
-        $GLOBALS['require_swiper_assets'] = true;
+        $has_hero_block = true;
         break;
+    }
+}
+if ($has_hero_block) {
+    try {
+        $GLOBALS['require_swiper_assets'] = (bool) $pdo->query("SELECT 1 FROM banners WHERE status = 1 LIMIT 1")->fetchColumn();
+    } catch (Throwable $e) {
+        $GLOBALS['require_swiper_assets'] = true;
     }
 }
 if (!$GLOBALS['require_swiper_assets']) {

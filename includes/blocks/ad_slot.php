@@ -12,7 +12,7 @@ if (empty($ad_items) || !is_array($ad_items)) {
 $ad_slot = $ad_slot ?? '';
 $ad_multi = !empty($ad_multi);
 $is_sticky = ($ad_slot === 'sticky_bottom');
-$above_fold = ($ad_slot === 'home_top');
+$above_fold = in_array($ad_slot, ['home_top', 'post_inline', 'post_top', 'category_top']);
 
 $render_one = function (array $b, bool $eager) {
     // Banner kiểu HTML tùy chỉnh: render thẳng, không bọc ảnh/link.

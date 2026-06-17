@@ -512,8 +512,9 @@ if (!isset($seo)) {
           media="print" onload="this.media='all'">
     <noscript><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.css"></noscript>
     <?php endif; ?>
-    <!-- Montserrat Font (self-hosted, không phụ thuộc Google CDN) -->
-    <link rel="stylesheet" href="<?php echo asset_url('assets/css/fonts.css'); ?>">
+    <!-- Montserrat Font (self-hosted) - Async -->
+    <link rel="stylesheet" href="<?php echo asset_url('assets/css/fonts.css'); ?>" media="print" onload="this.media='all'">
+    <noscript><link rel="stylesheet" href="<?php echo asset_url('assets/css/fonts.css'); ?>"></noscript>
 
     <?php $critical_css_mtime = @filemtime(__DIR__ . '/../assets/css/critical.css') ?: time(); ?>
     <!-- Critical CSS (render-blocking — above the fold) -->
@@ -524,9 +525,10 @@ if (!isset($seo)) {
     <noscript>
         <link rel="stylesheet" href="<?php echo asset_url('assets/css/components.css'); ?>">
     </noscript>
-    <!-- Blog CSS -->
+    <!-- Blog CSS (Async) -->
     <?php $blog_css_mtime = @filemtime(__DIR__ . '/../assets/css/blog.css') ?: time(); ?>
-    <link rel="stylesheet" href="<?php echo asset_url('assets/css/blog.css'); ?>&m=<?php echo $blog_css_mtime; ?>">
+    <link rel="stylesheet" href="<?php echo asset_url('assets/css/blog.css'); ?>&m=<?php echo $blog_css_mtime; ?>" media="print" onload="this.media='all'">
+    <noscript><link rel="stylesheet" href="<?php echo asset_url('assets/css/blog.css'); ?>&m=<?php echo $blog_css_mtime; ?>"></noscript>
     <style id="site-theme-vars">
         :root { <?php echo site_theme_css_vars(); ?> }
     </style>

@@ -245,8 +245,8 @@ $needs_locations_js = !empty($GLOBALS['require_locations_js']);
 <?php endif; ?>
 
 <?php if ($custom_script_footer): ?>
-    <!-- Custom Footer Scripts -->
-    <?php echo $custom_script_footer; ?>
+    <!-- Custom Footer Scripts (Delayed for PageSpeed) -->
+    <?php echo preg_replace('/<script\b([^>]*)>/i', '<script type="text/delayscript"$1>', $custom_script_footer); ?>
 <?php endif; ?>
 
 <style>
@@ -1455,7 +1455,17 @@ if (isset($pdo) && function_exists('render_ad_slot')) {
     }
     const events = ['scroll', 'mousemove', 'mousedown', 'touchstart', 'keydown'];
     events.forEach(e => window.addEventListener(e, executeDelayedScripts, {once: true, passive: true}));
-    setTimeout(executeDelayedScripts, 3500); // Fallback timeout if no interaction
+    const isMobile = window.matchMedia && window.matchMedia('(max-width: 767.98px)').matches;
+    const fallbackDelay = isMobile ? 9000 : 3500;
+    window.addEventListener('load', function () {
+        setTimeout(function () {
+            if ('requestIdleCallback' in window) {
+                requestIdleCallback(executeDelayedScripts, { timeout: 2500 });
+            } else {
+                executeDelayedScripts();
+            }
+        }, fallbackDelay);
+    }, { once: true });
 })();
 </script>
 </body>

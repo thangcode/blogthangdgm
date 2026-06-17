@@ -498,8 +498,9 @@ if (!isset($seo)) {
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
     <link rel="preload" href="<?php echo BASE_URL; ?>assets/fonts/montserrat/montserrat-vietnamese.woff2" as="font" type="font/woff2" crossorigin>
     <link rel="preload" href="<?php echo BASE_URL; ?>assets/fonts/montserrat/montserrat-latin.woff2" as="font" type="font/woff2" crossorigin>
-    <!-- Bootstrap CSS (render-blocking — cần cho grid, form, layout) -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap CSS async; critical.css giu layout dau trang -->
+    <link rel="preload" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" as="style" crossorigin onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"></noscript>
     <!-- Bootstrap Icons — async (không block render) -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css"
           media="print" onload="this.media='all'">

@@ -5,7 +5,7 @@
 
 $post_url = postUrl($item['slug'] ?? '');
 $post_img_path = (string) ($item['image'] ?? '');
-$post_img = $post_img_path !== '' ? app_resized_image_url($post_img_path, 480) : get_image_url('', 'news');
+$post_img = $post_img_path !== '' ? app_resized_image_url($post_img_path, 360) : get_image_url('', 'news');
 $post_img_srcset = $post_img_path !== '' ? app_image_srcset($post_img_path, [320, 360, 480]) : '';
 ?>
 <div class="dyncard-news h-100 <?php echo $card_extra_class ?? ''; ?>">
@@ -13,7 +13,7 @@ $post_img_srcset = $post_img_path !== '' ? app_image_srcset($post_img_path, [320
     <a href="<?php echo $post_url; ?>" class="dyncard-news-thumb">
         <?php if ($post_img): ?>
             <img src="<?php echo e($post_img); ?>"
-                 <?php echo $post_img_srcset !== '' ? 'srcset="' . $post_img_srcset . '" sizes="(max-width: 575px) calc(100vw - 24px), 33vw"' : ''; ?>
+                 <?php echo $post_img_srcset !== '' ? 'srcset="' . $post_img_srcset . '" sizes="(max-width: 575px) 320px, 33vw"' : ''; ?>
                  alt="<?php echo e($item['title']); ?>"
                  width="480" height="270" loading="lazy" decoding="async">
         <?php else: ?>

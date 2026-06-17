@@ -136,7 +136,7 @@ require_once 'includes/header.php';
         </nav>
 
         <div class="row justify-content-center g-4 g-lg-5">
-            <div class="col-lg-9<?php echo $sb_left ? ' order-lg-2' : ''; ?>">
+            <div class="col-lg-8<?php echo $sb_left ? ' order-lg-2' : ''; ?>">
                 <article>
                     <header class="mb-4">
                         <?php if (!empty($categories)): ?>
@@ -224,7 +224,7 @@ require_once 'includes/header.php';
             </div>
 
             <?php if ($has_sidebar): ?>
-            <aside class="col-lg-3<?php echo $sb_left ? ' order-lg-1' : ''; ?>">
+            <aside class="col-lg-4<?php echo $sb_left ? ' order-lg-1' : ''; ?>">
                 <div class="blog-sidebar sticky-lg-top">
                     <?php echo $sb_html; ?>
                 </div>

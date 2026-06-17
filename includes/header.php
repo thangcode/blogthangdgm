@@ -612,7 +612,17 @@ if (!isset($seo)) {
                         </a>
                     <?php endif; ?>
 
-                    <?php if (isset($post) && !empty($post['id'])): ?>
+                    <?php if (isset($page) && !empty($page['id'])): ?>
+    <a href="<?php echo BASE_URL; ?>admin/pages/edit.php?id=<?php echo (int) $page['id']; ?>"
+        title="Chỉnh sửa trang tĩnh"
+        style="color:#c3c4c7;text-decoration:none;padding:0 8px;height:32px;display:flex;align-items:center;gap:5px;transition:color .1s,background .1s;"
+        onmouseover="this.style.color='#6366f1';this.style.background='#32373c'"
+        onmouseout="this.style.color='#c3c4c7';this.style.background='transparent'">
+        <i class="bi bi-pencil-square" style="font-size:12px;"></i> <span class="wp-adminbar-text">Sửa trang tĩnh</span>
+    </a>
+<?php endif; ?>
+
+<?php if (isset($post) && !empty($post['id'])): ?>
                         <a href="<?php echo BASE_URL; ?>admin/posts/edit.php?id=<?php echo (int) $post['id']; ?>"
                             title="Chỉnh sửa bài viết"
                             style="color:#c3c4c7;text-decoration:none;padding:0 8px;height:32px;display:flex;align-items:center;gap:5px;transition:color .1s,background .1s;"

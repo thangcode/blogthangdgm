@@ -9,6 +9,33 @@ require_once 'includes/functions.php';
 
 // Set SEO for 404 page
 $page_title = "404 - Không tìm thấy trang | " . get_setting('site_name');
+
+// Log 404 Error
+try {
+    $pdo->exec("CREATE TABLE IF NOT EXISTS error_404_logs (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        path VARCHAR(500) NOT NULL UNIQUE,
+        hits INT DEFAULT 1,
+        last_seen DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_last_seen (last_seen)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+    
+    // Get the relative path
+    $request_uri = $_SERVER['REQUEST_URI'] ?? '';
+    $parsed_path = parse_url($request_uri, PHP_URL_PATH);
+    $base_path = parse_url(BASE_URL, PHP_URL_PATH);
+    if ($base_path && strpos($parsed_path, $base_path) === 0) {
+        $parsed_path = substr($parsed_path, strlen($base_path));
+    }
+    $log_path = '/' . ltrim($parsed_path ?? '', '/');
+    
+    if ($log_path !== '/' && $log_path !== '') {
+        $stmt = $pdo->prepare("INSERT INTO error_404_logs (path, hits, last_seen) VALUES (?, 1, NOW()) ON DUPLICATE KEY UPDATE hits = hits + 1, last_seen = NOW()");
+        $stmt->execute([$log_path]);
+    }
+} catch (Throwable $e) {
+    // Ignore logging errors so 404 page still renders
+}
 ?>
 <!DOCTYPE html>
 <html lang="vi">

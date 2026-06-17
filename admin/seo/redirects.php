@@ -42,8 +42,11 @@ if (isset($_POST['delete_id'])) {
 if (isset($_POST['action']) && $_POST['action'] === 'add') {
     require_valid_csrf_token();
     $old_path = '/' . ltrim(trim($_POST['old_path'] ?? ''), '/');
-    $new_path = '/' . ltrim(trim($_POST['new_path'] ?? ''), '/');
-    if ($old_path === '/' || $new_path === '/') {
+    $new_path = trim($_POST['new_path'] ?? '');
+    if (!preg_match('/^https?:\/\//i', $new_path)) {
+        $new_path = '/' . ltrim($new_path, '/');
+    }
+    if ($old_path === '/' || $new_path === '/' || $new_path === '') {
         $error = 'Vui lòng nhập đường dẫn hợp lệ.';
     } elseif ($old_path === $new_path) {
         $error = 'Đường dẫn cũ và mới không được giống nhau.';
@@ -63,8 +66,11 @@ if (isset($_POST['action']) && $_POST['action'] === 'edit') {
     require_valid_csrf_token();
     $edit_id  = (int) $_POST['edit_id'];
     $old_path = '/' . ltrim(trim($_POST['old_path'] ?? ''), '/');
-    $new_path = '/' . ltrim(trim($_POST['new_path'] ?? ''), '/');
-    if ($old_path === '/' || $new_path === '/') {
+    $new_path = trim($_POST['new_path'] ?? '');
+    if (!preg_match('/^https?:\/\//i', $new_path)) {
+        $new_path = '/' . ltrim($new_path, '/');
+    }
+    if ($old_path === '/' || $new_path === '/' || $new_path === '') {
         $error = 'Vui lòng nhập đường dẫn hợp lệ.';
     } elseif ($old_path === $new_path) {
         $error = 'Đường dẫn cũ và mới không được giống nhau.';
@@ -121,6 +127,26 @@ if (isset($_GET['edit'])) {
         $edit_row = $s->fetch();
     } catch (PDOException $e) {}
 }
+
+// 404 LOGS PAGINATION
+$log_per_page = 20;
+$log_cur_page = max(1, (int) ($_GET['log_page'] ?? 1));
+try {
+    $count_log_stmt = $pdo->query("SELECT COUNT(*) FROM error_404_logs");
+    $total_logs = (int) $count_log_stmt->fetchColumn();
+} catch (PDOException $e) { $total_logs = 0; }
+
+$total_log_pages = max(1, (int) ceil($total_logs / $log_per_page));
+$log_cur_page    = min($log_cur_page, $total_log_pages);
+$log_offset      = ($log_cur_page - 1) * $log_per_page;
+
+try {
+    $logs_stmt = $pdo->prepare("SELECT * FROM error_404_logs ORDER BY last_seen DESC LIMIT $log_per_page OFFSET $log_offset");
+    $logs_stmt->execute();
+    $error_logs = $logs_stmt->fetchAll();
+} catch (PDOException $e) { $error_logs = []; }
+
+$active_tab = $_GET['tab'] ?? 'redirects';
 
 require_once '../includes/header.php';
 ?>
@@ -181,13 +207,10 @@ require_once '../includes/header.php';
                             <label class="form-label fw-bold">
                                 <i class="bi bi-arrow-right text-success me-1"></i>Đường dẫn MỚI
                             </label>
-                            <div class="input-group">
-                                <span class="input-group-text bg-light text-muted" style="font-size:0.8rem"><?php echo rtrim(BASE_URL, '/'); ?></span>
-                                <input type="text" class="form-control" name="new_path"
-                                    value="<?php echo e($edit_row['new_path'] ?? ''); ?>"
-                                    placeholder="/ten-danh-muc/slug-moi" required>
-                            </div>
-                            <div class="form-text">VD: <code>/cong-cu-marketing/thangdgm-gg-optimize</code></div>
+                            <input type="text" class="form-control" name="new_path"
+                                value="<?php echo e($edit_row['new_path'] ?? ''); ?>"
+                                placeholder="/slug-moi hoặc https://sub.domain.com/slug" required>
+                            <div class="form-text">URL nội bộ bắt đầu bằng <code>/</code> hoặc link ngoài <code>https://...</code></div>
                         </div>
 
                         <div class="d-grid gap-2">
@@ -217,138 +240,254 @@ require_once '../includes/header.php';
         <!-- Danh sách -->
         <div class="col-lg-8">
             <div class="card shadow-sm border-0">
-                <div class="card-header bg-white border-bottom d-flex justify-content-between align-items-center py-3">
-                    <div>
-                        <strong><i class="bi bi-list-ul me-2"></i>Danh sách Redirect</strong>
-                        <span class="badge bg-secondary ms-2"><?php echo $total; ?> bản ghi</span>
-                    </div>
-                    <!-- Search & Filter -->
-                    <form method="GET" class="d-flex gap-2 align-items-center">
-                        <select name="type" class="form-select form-select-sm" style="width:130px" onchange="this.form.submit()">
-                            <option value="">Tất cả loại</option>
-                            <option value="product"  <?php echo $type_filter === 'product'  ? 'selected' : ''; ?>>Sản phẩm</option>
-                            <option value="category" <?php echo $type_filter === 'category' ? 'selected' : ''; ?>>Danh mục</option>
-                            <option value="post"     <?php echo $type_filter === 'post'     ? 'selected' : ''; ?>>Bài viết</option>
-                            <option value="custom"   <?php echo $type_filter === 'custom'   ? 'selected' : ''; ?>>Thủ công</option>
-                        </select>
-                        <div class="input-group input-group-sm" style="width:220px">
-                            <input type="text" class="form-control" name="search" placeholder="Tìm đường dẫn..." value="<?php echo e($search); ?>">
-                            <button class="btn btn-outline-secondary" type="submit"><i class="bi bi-search"></i></button>
-                            <?php if ($search || $type_filter): ?>
-                                <a href="redirects.php" class="btn btn-outline-danger"><i class="bi bi-x"></i></a>
-                            <?php endif; ?>
+                <div class="card-header bg-white border-bottom p-0">
+                    <ul class="nav nav-tabs border-0 pt-2 px-3" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <a href="?tab=redirects" class="nav-link <?php echo $active_tab === 'redirects' ? 'active fw-bold' : 'text-muted'; ?>">
+                                <i class="bi bi-list-ul me-1"></i> Danh sách Redirect
+                                <span class="badge bg-secondary ms-1 rounded-pill"><?php echo $total; ?></span>
+                            </a>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <a href="?tab=404" class="nav-link <?php echo $active_tab === '404' ? 'active fw-bold text-danger' : 'text-muted'; ?>">
+                                <i class="bi bi-exclamation-triangle me-1"></i> Nhật ký 404
+                                <span class="badge bg-danger ms-1 rounded-pill"><?php echo $total_logs; ?></span>
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+                
+                <div class="card-body p-0">
+                    <?php if ($active_tab === 'redirects'): ?>
+                        <!-- SEARCH & FILTER cho Redirect -->
+                        <div class="p-3 bg-light border-bottom d-flex justify-content-end align-items-center">
+                            <form method="GET" class="d-flex gap-2 align-items-center m-0">
+                                <input type="hidden" name="tab" value="redirects">
+                                <select name="type" class="form-select form-select-sm" style="width:130px" onchange="this.form.submit()">
+                                    <option value="">Tất cả loại</option>
+                                    <option value="product"  <?php echo $type_filter === 'product'  ? 'selected' : ''; ?>>Sản phẩm</option>
+                                    <option value="category" <?php echo $type_filter === 'category' ? 'selected' : ''; ?>>Danh mục</option>
+                                    <option value="post"     <?php echo $type_filter === 'post'     ? 'selected' : ''; ?>>Bài viết</option>
+                                    <option value="custom"   <?php echo $type_filter === 'custom'   ? 'selected' : ''; ?>>Thủ công</option>
+                                </select>
+                                <div class="input-group input-group-sm" style="width:220px">
+                                    <input type="text" class="form-control" name="search" placeholder="Tìm đường dẫn..." value="<?php echo e($search); ?>">
+                                    <button class="btn btn-outline-secondary" type="submit"><i class="bi bi-search"></i></button>
+                                    <?php if ($search || $type_filter): ?>
+                                        <a href="redirects.php?tab=redirects" class="btn btn-outline-danger"><i class="bi bi-x"></i></a>
+                                    <?php endif; ?>
+                                </div>
+                            </form>
                         </div>
-                    </form>
-                </div>
-
-                <div class="table-responsive">
-                    <table class="table table-hover align-middle mb-0">
-                        <thead class="table-light">
-                            <tr>
-                                <th width="40">#</th>
-                                <th>Từ (URL cũ)</th>
-                                <th>Đến (URL mới)</th>
-                                <th width="100">Loại</th>
-                                <th width="120">Ngày tạo</th>
-                                <th width="100" class="text-end">Thao tác</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php if (empty($redirects)): ?>
-                                <tr>
-                                    <td colspan="6" class="text-center py-5 text-muted">
-                                        <i class="bi bi-inbox fs-1 d-block mb-2"></i>
-                                        <?php echo $search || $type_filter ? 'Không tìm thấy kết quả.' : 'Chưa có redirect nào.'; ?>
-                                    </td>
-                                </tr>
-                            <?php else: ?>
-                                <?php foreach ($redirects as $i => $r): ?>
-                                    <tr <?php echo (isset($_GET['edit']) && (int)$_GET['edit'] === (int)$r['id']) ? 'class="table-warning"' : ''; ?>>
-                                        <td class="text-muted small"><?php echo $offset + $i + 1; ?></td>
-                                        <td>
-                                            <code class="text-danger small"><?php echo e($r['old_path']); ?></code>
-                                        </td>
-                                        <td>
-                                            <a href="<?php echo BASE_URL . ltrim(e($r['new_path']), '/'); ?>" target="_blank"
-                                               class="text-decoration-none small">
-                                                <code class="text-success"><?php echo e($r['new_path']); ?></code>
-                                                <i class="bi bi-box-arrow-up-right ms-1" style="font-size:0.7rem"></i>
-                                            </a>
-                                        </td>
-                                        <td>
-                                            <?php
-                                            $type_badges = [
-                                                'product'  => ['bg-primary',   'Sản phẩm'],
-                                                'category' => ['bg-success',   'Danh mục'],
-                                                'post'     => ['bg-info',      'Bài viết'],
-                                                'custom'   => ['bg-secondary', 'Thủ công'],
-                                            ];
-                                            $tb = $type_badges[$r['entity_type']] ?? ['bg-dark', $r['entity_type']];
-                                            ?>
-                                            <span class="badge <?php echo $tb[0]; ?>"><?php echo $tb[1]; ?></span>
-                                        </td>
-                                        <td class="text-muted small"><?php echo date('d/m/Y', strtotime($r['created_at'])); ?></td>
-                                        <td class="text-end">
-                                            <a href="redirects.php?edit=<?php echo (int)$r['id']; ?><?php echo $search ? '&search=' . urlencode($search) : ''; ?><?php echo $type_filter ? '&type=' . urlencode($type_filter) : ''; ?>&page=<?php echo $cur_page; ?>"
-                                               class="btn btn-sm btn-outline-warning me-1" title="Sửa">
-                                                <i class="bi bi-pencil"></i>
-                                            </a>
-                                            <form method="POST" class="d-inline"
-                                                data-confirm="Xóa redirect này?" data-confirm-title="Xác nhận xóa" data-confirm-ok="Xóa" data-confirm-class="btn-danger">
-                                                <input type="hidden" name="csrf_token" value="<?php echo e(generate_csrf_token()); ?>">
-                                                <input type="hidden" name="delete_id" value="<?php echo (int)$r['id']; ?>">
-                                                <button type="submit" class="btn btn-sm btn-outline-danger" title="Xóa">
-                                                    <i class="bi bi-trash"></i>
-                                                </button>
-                                            </form>
-                                        </td>
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th width="40" class="ps-3">#</th>
+                                        <th>Từ (URL cũ)</th>
+                                        <th>Đến (URL mới)</th>
+                                        <th width="100">Loại</th>
+                                        <th width="120">Ngày tạo</th>
+                                        <th width="100" class="text-end pe-3">Thao tác</th>
                                     </tr>
-                                <?php endforeach; ?>
-                            <?php endif; ?>
-                        </tbody>
-                    </table>
+                                </thead>
+                                <tbody>
+                                    <?php if (empty($redirects)): ?>
+                                        <tr>
+                                            <td colspan="6" class="text-center py-5 text-muted">
+                                                <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+                                                <?php echo $search || $type_filter ? 'Không tìm thấy kết quả.' : 'Chưa có redirect nào.'; ?>
+                                            </td>
+                                        </tr>
+                                    <?php else: ?>
+                                        <?php foreach ($redirects as $i => $r): ?>
+                                            <tr <?php echo (isset($_GET['edit']) && (int)$_GET['edit'] === (int)$r['id']) ? 'class="table-warning"' : ''; ?>>
+                                                <td class="text-muted small ps-3"><?php echo $offset + $i + 1; ?></td>
+                                                <td>
+                                                    <code class="text-danger small"><?php echo e($r['old_path']); ?></code>
+                                                </td>
+                                                <td>
+                                                    <?php
+                                                    $is_absolute = preg_match('/^https?:\/\//i', $r['new_path']);
+                                                    $target_url = $is_absolute ? e($r['new_path']) : BASE_URL . ltrim(e($r['new_path']), '/');
+                                                    ?>
+                                                    <a href="<?php echo $target_url; ?>" target="_blank"
+                                                       class="text-decoration-none small">
+                                                        <code class="text-success"><?php echo e($r['new_path']); ?></code>
+                                                        <i class="bi bi-box-arrow-up-right ms-1" style="font-size:0.7rem"></i>
+                                                    </a>
+                                                </td>
+                                                <td>
+                                                    <?php
+                                                    $type_badges = [
+                                                        'product'  => ['bg-primary',   'Sản phẩm'],
+                                                        'category' => ['bg-success',   'Danh mục'],
+                                                        'post'     => ['bg-info',      'Bài viết'],
+                                                        'custom'   => ['bg-secondary', 'Thủ công'],
+                                                    ];
+                                                    $tb = $type_badges[$r['entity_type']] ?? ['bg-dark', $r['entity_type']];
+                                                    ?>
+                                                    <span class="badge <?php echo $tb[0]; ?>"><?php echo $tb[1]; ?></span>
+                                                </td>
+                                                <td class="text-muted small"><?php echo date('d/m/Y', strtotime($r['created_at'])); ?></td>
+                                                <td class="text-end pe-3">
+                                                    <a href="redirects.php?edit=<?php echo (int)$r['id']; ?>&tab=redirects<?php echo $search ? '&search=' . urlencode($search) : ''; ?><?php echo $type_filter ? '&type=' . urlencode($type_filter) : ''; ?>&page=<?php echo $cur_page; ?>"
+                                                       class="btn btn-sm btn-outline-warning me-1" title="Sửa">
+                                                        <i class="bi bi-pencil"></i>
+                                                    </a>
+                                                    <form method="POST" class="d-inline"
+                                                        data-confirm="Xóa redirect này?" data-confirm-title="Xác nhận xóa" data-confirm-ok="Xóa" data-confirm-class="btn-danger">
+                                                        <input type="hidden" name="csrf_token" value="<?php echo e(generate_csrf_token()); ?>">
+                                                        <input type="hidden" name="delete_id" value="<?php echo (int)$r['id']; ?>">
+                                                        <button type="submit" class="btn btn-sm btn-outline-danger" title="Xóa">
+                                                            <i class="bi bi-trash"></i>
+                                                        </button>
+                                                    </form>
+                                                </td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    <?php endif; ?>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- Pagination cho Redirect -->
+                        <?php if ($total_pages > 1): ?>
+                            <div class="card-footer bg-white d-flex justify-content-between align-items-center">
+                                <small class="text-muted">Trang <?php echo $cur_page; ?>/<?php echo $total_pages; ?> &mdash; <?php echo $total; ?> bản ghi</small>
+                                <nav>
+                                    <ul class="pagination pagination-sm mb-0">
+                                        <?php if ($cur_page > 1): ?>
+                                            <li class="page-item">
+                                                <a class="page-link" href="?tab=redirects&page=<?php echo $cur_page - 1; ?>&search=<?php echo urlencode($search); ?>&type=<?php echo urlencode($type_filter); ?>">
+                                                    <i class="bi bi-chevron-left"></i>
+                                                </a>
+                                            </li>
+                                        <?php endif; ?>
+
+                                        <?php
+                                        $start_p = max(1, $cur_page - 2);
+                                        $end_p   = min($total_pages, $cur_page + 2);
+                                        for ($p = $start_p; $p <= $end_p; $p++):
+                                        ?>
+                                            <li class="page-item <?php echo $p === $cur_page ? 'active' : ''; ?>">
+                                                <a class="page-link" href="?tab=redirects&page=<?php echo $p; ?>&search=<?php echo urlencode($search); ?>&type=<?php echo urlencode($type_filter); ?>">
+                                                    <?php echo $p; ?>
+                                                </a>
+                                            </li>
+                                        <?php endfor; ?>
+
+                                        <?php if ($cur_page < $total_pages): ?>
+                                            <li class="page-item">
+                                                <a class="page-link" href="?tab=redirects&page=<?php echo $cur_page + 1; ?>&search=<?php echo urlencode($search); ?>&type=<?php echo urlencode($type_filter); ?>">
+                                                    <i class="bi bi-chevron-right"></i>
+                                                </a>
+                                            </li>
+                                        <?php endif; ?>
+                                    </ul>
+                                </nav>
+                            </div>
+                        <?php endif; ?>
+
+                    <?php else: ?>
+                        <!-- TAB 404 LOGS -->
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th width="40" class="ps-3">#</th>
+                                        <th>Đường dẫn lỗi (404)</th>
+                                        <th width="100" class="text-center">Số lượt</th>
+                                        <th width="150">Lần cuối</th>
+                                        <th width="120" class="text-end pe-3">Thao tác</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php if (empty($error_logs)): ?>
+                                        <tr>
+                                            <td colspan="5" class="text-center py-5 text-muted">
+                                                <i class="bi bi-check-circle fs-1 d-block mb-2 text-success"></i>
+                                                Tuyệt vời! Không có lỗi 404 nào được ghi nhận.
+                                            </td>
+                                        </tr>
+                                    <?php else: ?>
+                                        <?php foreach ($error_logs as $i => $log): ?>
+                                            <tr>
+                                                <td class="text-muted small ps-3"><?php echo $log_offset + $i + 1; ?></td>
+                                                <td>
+                                                    <a href="<?php echo BASE_URL . ltrim(e($log['path']), '/'); ?>" target="_blank" class="text-decoration-none small text-danger fw-medium">
+                                                        <?php echo e($log['path']); ?>
+                                                    </a>
+                                                </td>
+                                                <td class="text-center">
+                                                    <span class="badge bg-secondary"><?php echo number_format($log['hits']); ?></span>
+                                                </td>
+                                                <td class="text-muted small">
+                                                    <?php echo date('H:i d/m/Y', strtotime($log['last_seen'])); ?>
+                                                </td>
+                                                <td class="text-end pe-3">
+                                                    <button type="button" class="btn btn-sm btn-outline-primary" title="Tạo Redirect 301 cho link này" onclick="fillAddRedirect('<?php echo e(addslashes($log['path'])); ?>')">
+                                                        <i class="bi bi-arrow-right-circle me-1"></i> Tạo Redirect
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    <?php endif; ?>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- Pagination cho 404 Logs -->
+                        <?php if ($total_log_pages > 1): ?>
+                            <div class="card-footer bg-white d-flex justify-content-between align-items-center">
+                                <small class="text-muted">Trang <?php echo $log_cur_page; ?>/<?php echo $total_log_pages; ?> &mdash; <?php echo $total_logs; ?> lỗi</small>
+                                <nav>
+                                    <ul class="pagination pagination-sm mb-0">
+                                        <?php if ($log_cur_page > 1): ?>
+                                            <li class="page-item">
+                                                <a class="page-link" href="?tab=404&log_page=<?php echo $log_cur_page - 1; ?>">
+                                                    <i class="bi bi-chevron-left"></i>
+                                                </a>
+                                            </li>
+                                        <?php endif; ?>
+
+                                        <?php
+                                        $start_p = max(1, $log_cur_page - 2);
+                                        $end_p   = min($total_log_pages, $log_cur_page + 2);
+                                        for ($p = $start_p; $p <= $end_p; $p++):
+                                        ?>
+                                            <li class="page-item <?php echo $p === $log_cur_page ? 'active' : ''; ?>">
+                                                <a class="page-link" href="?tab=404&log_page=<?php echo $p; ?>">
+                                                    <?php echo $p; ?>
+                                                </a>
+                                            </li>
+                                        <?php endfor; ?>
+
+                                        <?php if ($log_cur_page < $total_log_pages): ?>
+                                            <li class="page-item">
+                                                <a class="page-link" href="?tab=404&log_page=<?php echo $log_cur_page + 1; ?>">
+                                                    <i class="bi bi-chevron-right"></i>
+                                                </a>
+                                            </li>
+                                        <?php endif; ?>
+                                    </ul>
+                                </nav>
+                            </div>
+                        <?php endif; ?>
+
+                    <?php endif; ?>
                 </div>
-
-                <!-- Pagination -->
-                <?php if ($total_pages > 1): ?>
-                    <div class="card-footer bg-white d-flex justify-content-between align-items-center">
-                        <small class="text-muted">Trang <?php echo $cur_page; ?>/<?php echo $total_pages; ?> &mdash; <?php echo $total; ?> bản ghi</small>
-                        <nav>
-                            <ul class="pagination pagination-sm mb-0">
-                                <?php if ($cur_page > 1): ?>
-                                    <li class="page-item">
-                                        <a class="page-link" href="?page=<?php echo $cur_page - 1; ?>&search=<?php echo urlencode($search); ?>&type=<?php echo urlencode($type_filter); ?>">
-                                            <i class="bi bi-chevron-left"></i>
-                                        </a>
-                                    </li>
-                                <?php endif; ?>
-
-                                <?php
-                                $start_p = max(1, $cur_page - 2);
-                                $end_p   = min($total_pages, $cur_page + 2);
-                                for ($p = $start_p; $p <= $end_p; $p++):
-                                ?>
-                                    <li class="page-item <?php echo $p === $cur_page ? 'active' : ''; ?>">
-                                        <a class="page-link" href="?page=<?php echo $p; ?>&search=<?php echo urlencode($search); ?>&type=<?php echo urlencode($type_filter); ?>">
-                                            <?php echo $p; ?>
-                                        </a>
-                                    </li>
-                                <?php endfor; ?>
-
-                                <?php if ($cur_page < $total_pages): ?>
-                                    <li class="page-item">
-                                        <a class="page-link" href="?page=<?php echo $cur_page + 1; ?>&search=<?php echo urlencode($search); ?>&type=<?php echo urlencode($type_filter); ?>">
-                                            <i class="bi bi-chevron-right"></i>
-                                        </a>
-                                    </li>
-                                <?php endif; ?>
-                            </ul>
-                        </nav>
-                    </div>
-                <?php endif; ?>
             </div>
         </div>
     </div>
 </div>
+
+<script>
+function fillAddRedirect(oldPath) {
+    document.querySelector('input[name="old_path"]').value = oldPath;
+    document.querySelector('input[name="new_path"]').focus();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+</script>
 
 <?php require_once '../includes/footer.php'; ?>

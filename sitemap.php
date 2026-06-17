@@ -15,9 +15,38 @@ require_once 'includes/url-helper.php';
 echo '<?xml version="1.0" encoding="UTF-8"?>' . "\n";
 echo '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' . "\n";
 
+$redirected_paths = [];
+try {
+    $stmt = $pdo->query("SELECT old_path FROM slug_redirects");
+    foreach ($stmt->fetchAll(PDO::FETCH_COLUMN) as $p) {
+        $redirected_paths[] = '/' . ltrim(trim($p), '/');
+    }
+} catch (Throwable $e) {}
+
 // Helper function to output URL entry
 function outputUrl($loc, $lastmod = null, $changefreq = 'weekly', $priority = '0.5')
 {
+    global $redirected_paths;
+    
+    // Parse the path from the absolute URL to check against redirects
+    $parsed_path = parse_url($loc, PHP_URL_PATH) ?? '';
+    $base_path = parse_url(BASE_URL, PHP_URL_PATH) ?? '';
+    if ($base_path && strpos($parsed_path, $base_path) === 0) {
+        $parsed_path = substr($parsed_path, strlen($base_path));
+    }
+    $check_path = '/' . ltrim($parsed_path, '/');
+    
+    if (in_array($check_path, $redirected_paths)) {
+        return; // Bỏ qua URL nếu nó đang bị redirect 301
+    }
+    
+    // Also check without trailing slash if it has one
+    if (str_ends_with($check_path, '/') && $check_path !== '/') {
+        if (in_array(rtrim($check_path, '/'), $redirected_paths)) {
+            return;
+        }
+    }
+
     echo "  <url>\n";
     echo "    <loc>" . htmlspecialchars($loc) . "</loc>\n";
     if ($lastmod) {

@@ -32,18 +32,24 @@ $hero_boxed = (string) get_setting('hero_width', 'full') === 'boxed';
 
                         <?php if (!empty($banner['mobile_image_path'])): ?>
                             <?php 
-                                $mobile_src = get_image_url($banner['mobile_image_path'], 'banner');
-                                $desktop_src = get_image_url($banner['image_path'] ?? '', 'banner');
+                                $mobile_path = (string) $banner['mobile_image_path'];
+                                $desktop_path = (string) ($banner['image_path'] ?? '');
+                                $mobile_src = app_resized_image_url($mobile_path, 768);
+                                $desktop_src = app_resized_image_url($desktop_path, 1600);
+                                $mobile_srcset = app_image_srcset($mobile_path, [360, 576, 768]);
+                                $desktop_srcset = app_image_srcset($desktop_path, [960, 1280, 1600]);
                             ?>
                             <picture>
-                                <source media="(max-width: 768px)" srcset="<?php echo $mobile_src; ?>">
-                                <img src="<?php echo $desktop_src; ?>" alt="<?php echo e($banner['title']); ?>" class="img-fluid w-100" width="1920" height="560" <?php echo $loading_attr; ?> decoding="async">
+                                <source media="(max-width: 768px)" srcset="<?php echo $mobile_srcset; ?>" sizes="100vw">
+                                <img src="<?php echo e($desktop_src); ?>" srcset="<?php echo $desktop_srcset; ?>" sizes="100vw" alt="<?php echo e($banner['title']); ?>" class="img-fluid w-100" width="1920" height="560" <?php echo $loading_attr; ?> decoding="async">
                             </picture>
                         <?php else: ?>
                             <?php 
-                                $desktop_src = get_image_url($banner['image_path'] ?? '', 'banner');
+                                $desktop_path = (string) ($banner['image_path'] ?? '');
+                                $desktop_src = app_resized_image_url($desktop_path, 1600);
+                                $desktop_srcset = app_image_srcset($desktop_path, [640, 960, 1280, 1600]);
                             ?>
-                            <img src="<?php echo $desktop_src; ?>" alt="<?php echo e($banner['title']); ?>" class="img-fluid w-100" width="1920" height="560" <?php echo $loading_attr; ?> decoding="async">
+                            <img src="<?php echo e($desktop_src); ?>" srcset="<?php echo $desktop_srcset; ?>" sizes="100vw" alt="<?php echo e($banner['title']); ?>" class="img-fluid w-100" width="1920" height="560" <?php echo $loading_attr; ?> decoding="async">
                         <?php endif; ?>
 
                         <?php if (!empty($banner['link_url'])): ?>

@@ -159,7 +159,10 @@ require_once 'includes/header.php';
                     <?php if ($post_above_html !== ''): ?>
                         <?php echo $post_above_html; ?>
                     <?php elseif (!empty($post['thumbnail'])): ?>
-                        <img src="<?php echo e(blog_thumb($post)); ?>" class="single-thumb mb-4"
+                        <img src="<?php echo e(app_resized_image_url((string) $post['thumbnail'], 960)); ?>"
+                             srcset="<?php echo app_image_srcset((string) $post['thumbnail'], [480, 768, 960, 1280]); ?>"
+                             sizes="(max-width: 991px) 100vw, 760px"
+                             class="single-thumb mb-4" width="960" height="540"
                              alt="<?php echo e($post['thumbnail_alt'] ?? $post['title']); ?>" fetchpriority="high" decoding="async">
                     <?php endif; ?>
 

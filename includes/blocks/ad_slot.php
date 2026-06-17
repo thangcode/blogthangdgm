@@ -12,9 +12,9 @@ if (empty($ad_items) || !is_array($ad_items)) {
 $ad_slot = $ad_slot ?? '';
 $ad_multi = !empty($ad_multi);
 $is_sticky = ($ad_slot === 'sticky_bottom');
-$above_fold = in_array($ad_slot, ['home_top', 'post_inline', 'post_top', 'post_above_content', 'category_top']);
+$above_fold = in_array($ad_slot, ['home_top', 'home_sidebar', 'post_inline', 'post_top', 'post_above_content', 'post_sidebar', 'category_top']);
 
-$render_one = function (array $b, bool $eager) {
+$render_one = function (array $b, bool $eager) use ($ad_slot) {
     // Banner kiểu HTML tùy chỉnh: render thẳng, không bọc ảnh/link.
     if ((string) ($b['banner_type'] ?? 'image') === 'html') {
         $html = trim((string) ($b['html_content'] ?? ''));
@@ -28,25 +28,22 @@ $render_one = function (array $b, bool $eager) {
     if ($img === '') {
         return '';
     }
-    $desktop = get_image_url($img, 'banner');
-    $mobile  = trim((string) ($b['mobile_image_path'] ?? '')) !== '' ? get_image_url($b['mobile_image_path'], 'banner') : '';
+    $desktop_width = in_array($ad_slot ?? '', ['home_sidebar', 'post_sidebar', 'product_sidebar'], true) ? 420 : 1200;
+    $desktop = app_resized_image_url($img, $desktop_width);
+    $mobile_path = trim((string) ($b['mobile_image_path'] ?? ''));
+    $mobile = $mobile_path !== '' ? app_resized_image_url($mobile_path, 420) : '';
     $alt = e((string) ($b['title'] ?? ''));
     $loading = $eager ? 'fetchpriority="high"' : 'loading="lazy" decoding="async"';
-
-    $dims_attr = '';
-    $local_path = rtrim($_SERVER['DOCUMENT_ROOT'], '/') . '/' . ltrim($img, '/');
-    if (file_exists($local_path)) {
-        $size = @getimagesize($local_path);
-        if ($size) {
-            $dims_attr = ' width="' . $size[0] . '" height="' . $size[1] . '"';
-        }
-    }
+    $dims_attr = app_image_dimensions_attr($img);
+    $desktop_srcset = app_image_srcset($img, in_array($ad_slot ?? '', ['home_sidebar', 'post_sidebar', 'product_sidebar'], true) ? [300, 420, 600] : [640, 960, 1200]);
+    $sizes_attr = in_array($ad_slot ?? '', ['home_sidebar', 'post_sidebar', 'product_sidebar'], true) ? '(max-width: 991px) 100vw, 360px' : '100vw';
 
     $picture = '<picture>';
     if ($mobile !== '') {
-        $picture .= '<source media="(max-width: 768px)" srcset="' . e($mobile) . '">';
+        $mobile_srcset = $mobile_path !== '' ? app_image_srcset($mobile_path, [320, 420, 640]) : e($mobile);
+        $picture .= '<source media="(max-width: 768px)" srcset="' . $mobile_srcset . '" sizes="100vw">';
     }
-    $picture .= '<img src="' . e($desktop) . '" alt="' . $alt . '" class="ss-spot__media" ' . $loading . $dims_attr . '>';
+    $picture .= '<img src="' . e($desktop) . '" srcset="' . $desktop_srcset . '" sizes="' . $sizes_attr . '" alt="' . $alt . '" class="ss-spot__media" ' . $loading . $dims_attr . '>';
     $picture .= '</picture>';
 
     $link = trim((string) ($b['link_url'] ?? ''));
@@ -96,7 +93,7 @@ foreach ($ad_items as $_b) {
     <?php if ($ad_multi && count($ad_items) > 1): ?>
         <div class="ss-spot__list">
             <?php foreach ($ad_items as $i => $b): ?>
-                <?php echo $render_one($b, false); ?>
+                <?php echo $render_one($b, $above_fold && $i === 0); ?>
             <?php endforeach; ?>
         </div>
     <?php else: ?>

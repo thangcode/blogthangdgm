@@ -181,8 +181,10 @@ function widget_render_body(PDO $pdo, string $type, array $settings, array $w): 
                         <a href="<?php echo postUrl($p['slug']); ?>" class="wp-item__link">
                             <?php if ($showThumb): ?>
                                 <span class="wp-item__thumb">
-                                    <img src="<?php echo e(get_image_url($p['thumbnail'] ?? '', 'news')); ?>"
-                                         alt="<?php echo e($p['thumbnail_alt'] ?? $p['title']); ?>" loading="lazy" decoding="async">
+                                    <?php $widget_thumb_path = (string) ($p['thumbnail'] ?? ''); ?>
+                                    <img src="<?php echo e($widget_thumb_path !== '' ? app_resized_image_url($widget_thumb_path, 160) : get_image_url('', 'news')); ?>"
+                                         <?php echo $widget_thumb_path !== '' ? 'srcset="' . app_image_srcset($widget_thumb_path, [96, 160, 240]) . '" sizes="64px" ' : ''; ?>
+                                         alt="<?php echo e($p['thumbnail_alt'] ?? $p['title']); ?>" width="160" height="120" loading="lazy" decoding="async">
                                 </span>
                             <?php endif; ?>
                             <span class="wp-item__body">

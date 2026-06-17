@@ -4,16 +4,18 @@
 // Variables: $item, $card_extra_class, $db_layout
 
 $post_url = postUrl($item['slug'] ?? '');
-$post_img = get_image_url($item['image'] ?? '', 'news');
+$post_img_path = (string) ($item['image'] ?? '');
+$post_img = $post_img_path !== '' ? app_resized_image_url($post_img_path, 640) : get_image_url('', 'news');
+$post_img_srcset = $post_img_path !== '' ? app_image_srcset($post_img_path, [320, 480, 640]) : '';
 ?>
 <div class="dyncard-news h-100 <?php echo $card_extra_class ?? ''; ?>">
     <!-- Thumbnail -->
     <a href="<?php echo $post_url; ?>" class="dyncard-news-thumb">
         <?php if ($post_img): ?>
-            <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 9'%3E%3C/svg%3E"
-                 data-src="<?php echo $post_img; ?>"
+            <img src="<?php echo e($post_img); ?>"
+                 <?php echo $post_img_srcset !== '' ? 'srcset="' . $post_img_srcset . '" sizes="(max-width: 575px) 100vw, 33vw"' : ''; ?>
                  alt="<?php echo e($item['title']); ?>"
-                 class="lazy-img" width="400" height="225">
+                 width="640" height="360" loading="lazy" decoding="async">
         <?php else: ?>
             <div class="dyncard-news-placeholder">
                 <i class="bi bi-newspaper"></i>

@@ -2190,6 +2190,151 @@ function asset_url($path)
     return BASE_URL . $path . '?v=' . $cache_version;
 }
 
+function app_local_image_path(string $image_path)
+{
+    $image_path = trim($image_path);
+    if ($image_path === '' || preg_match('#^(https?:)?//#i', $image_path)) {
+        return false;
+    }
+
+    $path = (string) parse_url($image_path, PHP_URL_PATH);
+    $base_path = trim((string) parse_url(BASE_URL, PHP_URL_PATH), '/');
+    $path = ltrim($path, '/');
+    if ($base_path !== '' && strpos($path, $base_path . '/') === 0) {
+        $path = substr($path, strlen($base_path) + 1);
+    }
+
+    $root = defined('ROOT_PATH') ? rtrim(ROOT_PATH, '/\\') : dirname(__DIR__);
+    $full = realpath($root . DIRECTORY_SEPARATOR . str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $path));
+    $root_real = realpath($root);
+    if (!$full || !$root_real || strpos($full, $root_real) !== 0 || !is_file($full)) {
+        return false;
+    }
+
+    return $full;
+}
+
+function app_image_dimensions_attr(string $image_path): string
+{
+    $full = app_local_image_path($image_path);
+    if (!$full) {
+        return '';
+    }
+    $size = @getimagesize($full);
+    if (!$size || empty($size[0]) || empty($size[1])) {
+        return '';
+    }
+    return ' width="' . (int) $size[0] . '" height="' . (int) $size[1] . '"';
+}
+
+function app_resized_image_url(string $image_path, int $target_width, int $quality = 82): string
+{
+    $target_width = max(80, min(1920, $target_width));
+    $full = app_local_image_path($image_path);
+    if (!$full) {
+        return get_image_url($image_path, 'news');
+    }
+
+    $info = @getimagesize($full);
+    if (!$info || empty($info[0]) || empty($info[1])) {
+        return get_image_url($image_path, 'news');
+    }
+
+    $source_width = (int) $info[0];
+    $source_height = (int) $info[1];
+    $mime = (string) ($info['mime'] ?? '');
+    if ($source_width <= 0 || $source_height <= 0) {
+        return get_image_url($image_path, 'news');
+    }
+
+    if ($source_width <= $target_width && $mime === 'image/webp') {
+        return get_image_url($image_path, 'news');
+    }
+
+    $root = defined('ROOT_PATH') ? rtrim(ROOT_PATH, '/\\') : dirname(__DIR__);
+    $cache_dir = $root . DIRECTORY_SEPARATOR . 'cache' . DIRECTORY_SEPARATOR . 'images';
+    if (!is_dir($cache_dir)) {
+        @mkdir($cache_dir, 0755, true);
+    }
+    if (!is_dir($cache_dir) || !is_writable($cache_dir)) {
+        return get_image_url($image_path, 'news');
+    }
+
+    $mtime = (int) @filemtime($full);
+    $hash = substr(sha1($full . '|' . $mtime . '|' . $target_width), 0, 18);
+    $dest = $cache_dir . DIRECTORY_SEPARATOR . $hash . '-' . $target_width . '.webp';
+    if (!is_file($dest) || @filemtime($dest) < $mtime) {
+        $new_width = min($target_width, $source_width);
+        $new_height = max(1, (int) round($source_height * $new_width / $source_width));
+        $ok = false;
+
+        if (function_exists('imagewebp')) {
+            $src = null;
+            if ($mime === 'image/jpeg') {
+                $src = function_exists('imagecreatefromjpeg') ? @imagecreatefromjpeg($full) : null;
+            } elseif ($mime === 'image/png') {
+                $src = function_exists('imagecreatefrompng') ? @imagecreatefrompng($full) : null;
+            } elseif ($mime === 'image/gif') {
+                $src = function_exists('imagecreatefromgif') ? @imagecreatefromgif($full) : null;
+            } elseif ($mime === 'image/webp') {
+                $src = function_exists('imagecreatefromwebp') ? @imagecreatefromwebp($full) : null;
+            }
+
+            if ($src) {
+                $dst = imagecreatetruecolor($new_width, $new_height);
+                if ($dst) {
+                    imagealphablending($dst, false);
+                    imagesavealpha($dst, true);
+                    $transparent = imagecolorallocatealpha($dst, 0, 0, 0, 127);
+                    imagefilledrectangle($dst, 0, 0, $new_width, $new_height, $transparent);
+                    imagecopyresampled($dst, $src, 0, 0, 0, 0, $new_width, $new_height, $source_width, $source_height);
+                    $ok = @imagewebp($dst, $dest, $quality);
+                    imagedestroy($dst);
+                }
+                imagedestroy($src);
+            }
+        }
+
+        if (!$ok && class_exists('Imagick')) {
+            try {
+                $im = new Imagick($full);
+                if ($source_width > $target_width) {
+                    $im->resizeImage($new_width, $new_height, Imagick::FILTER_LANCZOS, 1);
+                }
+                $im->setImageFormat('webp');
+                $im->setImageCompressionQuality($quality);
+                $ok = $im->writeImage($dest);
+                $im->clear();
+                $im->destroy();
+            } catch (Throwable $e) {
+                $ok = false;
+            }
+        }
+
+        if (!$ok || !is_file($dest) || filesize($dest) <= 0) {
+            if (is_file($dest)) {
+                @unlink($dest);
+            }
+            return get_image_url($image_path, 'news');
+        }
+    }
+
+    return BASE_URL . 'cache/images/' . basename($dest);
+}
+
+function app_image_srcset(string $image_path, array $widths = [320, 640, 960]): string
+{
+    $parts = [];
+    foreach ($widths as $width) {
+        $width = (int) $width;
+        if ($width <= 0) {
+            continue;
+        }
+        $parts[] = e(app_resized_image_url($image_path, $width)) . ' ' . $width . 'w';
+    }
+    return implode(', ', array_unique($parts));
+}
+
 /**
  * Log a conversion event (form submission, contact click, etc.)
  *

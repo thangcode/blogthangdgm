@@ -480,8 +480,8 @@ if (!isset($seo)) {
             $lcp_banner = null;
         }
         if ($lcp_banner && !empty($lcp_banner['image_path'])):
-            $lcp_desktop = get_image_url($lcp_banner['image_path'], 'banner');
-            $lcp_mobile = !empty($lcp_banner['mobile_image_path']) ? get_image_url($lcp_banner['mobile_image_path'], 'banner') : null;
+            $lcp_desktop = app_resized_image_url((string) $lcp_banner['image_path'], 1600);
+            $lcp_mobile = !empty($lcp_banner['mobile_image_path']) ? app_resized_image_url((string) $lcp_banner['mobile_image_path'], 768) : null;
     ?>
     <?php if ($lcp_mobile): ?>
     <link rel="preload" as="image" href="<?php echo $lcp_mobile; ?>" media="(max-width: 768px)">
@@ -496,6 +496,8 @@ if (!isset($seo)) {
 
     <!-- CDN preconnect (giảm latency DNS + TLS cho Bootstrap) -->
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+    <link rel="preload" href="<?php echo BASE_URL; ?>assets/fonts/montserrat/montserrat-vietnamese.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="<?php echo BASE_URL; ?>assets/fonts/montserrat/montserrat-latin.woff2" as="font" type="font/woff2" crossorigin>
     <!-- Bootstrap CSS (render-blocking — cần cho grid, form, layout) -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <!-- Bootstrap Icons — async (không block render) -->
@@ -959,7 +961,7 @@ if (!isset($seo)) {
                         <?php 
                             $logo_src = (strpos($site_logo, 'http') === 0 || strpos($site_logo, '//') === 0) ? $site_logo : BASE_URL . $site_logo;
                         ?>
-                        <img src="<?php echo $logo_src; ?>" alt="<?php echo e($site_name); ?>">
+                        <img src="<?php echo $logo_src; ?>" alt="<?php echo e($site_name); ?>"<?php echo app_image_dimensions_attr((string) $site_logo); ?> decoding="async">
                     <?php endif; ?>
                     <span class="fw-bold brand-text">
                         <?php echo e($site_name); ?>

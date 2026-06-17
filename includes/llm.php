@@ -366,6 +366,10 @@ if (!function_exists('ai_rewrite_blog_post')) {
             . "- Cấu trúc: đoạn mở bài ngắn; nhiều mục <h2> (dùng <h3> cho mục con khi cần); <p> đoạn văn; <ul><li> liệt kê; <strong> nhấn mạnh; đoạn kết; mục <h2>Câu hỏi thường gặp với 3-5 câu hỏi (mỗi câu là <h3> + <p> trả lời).\n"
             . "- CHUẨN SEO: suy ra từ khóa chính từ tiêu đề, đặt vào đoạn mở đầu; rải từ khóa + từ đồng nghĩa (LSI) tự nhiên trong các <h2>/<h3> và đoạn văn; không nhồi nhét.\n"
             . "- CHUẨN GEO (tối ưu cho Google AI Overviews, ChatGPT, Perplexity): trả lời trực tiếp, rõ ràng ngay đầu mỗi mục; nêu dữ kiện cụ thể (số liệu, bước làm, ví dụ) để AI dễ trích dẫn; nêu rõ thực thể (tên công cụ, nền tảng, khái niệm).\n";
+        if ($youtubeId !== '') {
+            $system .= "- Nếu nội dung gốc lấy từ YouTube: chỉ khai thác ý chính và kiến thức trong video; bỏ qua phần liên hệ/cuối video như số điện thoại, Zalo, Facebook, email, link mua hàng, link khóa học, mã giảm giá, kêu gọi đăng ký kênh, lời chào/tạm biệt, lịch livestream hoặc thông tin quảng bá không cần thiết. Không đưa các thông tin liên hệ đó vào đoạn kết, FAQ, meta description hoặc CTA.\n"
+                . "- Video YouTube sẽ được hệ thống chèn ở cuối bài, vì vậy KHÔNG tự tạo iframe, shortcode, URL video hoặc đoạn mời xem video trong nội dung AI trả về.\n";
+        }
         $user = "TIÊU ĐỀ BÀI: $title\n";
         if (trim($seed) !== '') {
             $user .= "Ý TƯỞNG / NỘI DUNG GỐC (tham khảo, viết lại hoàn toàn bằng lời của bạn):\n" . mb_substr(strip_tags($seed), 0, 3000, 'UTF-8') . "\n";

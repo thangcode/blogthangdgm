@@ -162,7 +162,7 @@ $qs = function($overrides = []) use ($q, $cat, $status) {
     <div class="modal-content">
       <div class="modal-header"><h5 class="modal-title"><i class="bi bi-youtube text-danger me-2"></i>Nhập ý tưởng / YouTube</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
       <div class="modal-body">
-        <p class="text-muted small">Mỗi dòng là một <strong>ý tưởng</strong> (dùng làm tiêu đề) hoặc một <strong>link YouTube</strong> (tự lấy tiêu đề + nhúng video). Bài tạo ra ở dạng <strong>Nháp</strong>. Sau đó chọn bài và bấm "Viết lại AI" để có bài hoàn chỉnh.</p>
+        <p class="text-muted small">Mỗi dòng là một <strong>ý tưởng</strong> (dùng làm tiêu đề) hoặc một <strong>link YouTube</strong>. Link YouTube sẽ tự lấy tiêu đề, mô tả, tags, thumbnail, nhúng video và viết bài SEO+GEO ở dạng <strong>Nháp</strong>. Dòng ý tưởng thường vẫn tạo nháp để bạn xử lý sau.</p>
         <textarea id="ideasInput" class="form-control" rows="8" placeholder="Cách chạy quảng cáo Facebook hiệu quả&#10;https://www.youtube.com/watch?v=xxxxxxxxxxx&#10;5 mẹo tối ưu Google Ads"></textarea>
       </div>
       <div class="modal-footer">
@@ -251,7 +251,7 @@ document.addEventListener('DOMContentLoaded', function () {
     if (btnImport) btnImport.addEventListener('click', async function () {
         const text = document.getElementById('ideasInput').value.trim();
         if (!text) { alert('Vui lòng nhập ít nhất 1 dòng.'); return; }
-        btnImport.disabled = true; btnImport.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Đang tạo...';
+        btnImport.disabled = true; btnImport.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Đang tạo + viết AI...';
         try {
             const body = new URLSearchParams({ ideas: text, csrf_token: POST_CSRF });
             const r = await fetch('../ajax/post-import.php', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: body.toString() });

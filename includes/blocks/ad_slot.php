@@ -107,9 +107,12 @@ $GLOBALS['_ss_spot_css_emitted'] = true; ?>
 <style>
 .ss-spot { position: relative; margin: 1.25rem 0; }
 .ss-spot__tag { position: absolute; top: 6px; right: 8px; z-index: 2; font-size: .58rem; letter-spacing: .04em; text-transform: none; color: #fff; background: rgba(15,23,42,.55); padding: 1px 7px; border-radius: 999px; pointer-events: none; }
-.ss-spot__link { display: block; border-radius: 12px; overflow: hidden; line-height: 0; box-shadow: 0 4px 16px rgba(0,0,0,.06); transition: transform .2s ease, box-shadow .2s ease; }
-.ss-spot__link:hover { transform: translateY(-2px); box-shadow: 0 10px 24px rgba(0,0,0,.12); }
-.ss-spot__media { width: 100%; height: auto; display: block; }
+.ss-spot__link { display: block; position: relative; border-radius: 12px; overflow: hidden; line-height: 0; box-shadow: 0 4px 16px rgba(0,0,0,.06); isolation: isolate; transform: translateZ(0); transition: box-shadow .35s cubic-bezier(.2,.8,.2,1); }
+.ss-spot__link::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(135deg, rgba(255,255,255,.18), rgba(255,255,255,0) 46%); opacity: 0; transition: opacity .35s ease; }
+.ss-spot__link:hover { box-shadow: 0 14px 32px rgba(15,23,42,.16); }
+.ss-spot__link:hover::after { opacity: 1; }
+.ss-spot__media { width: 100%; height: auto; display: block; transform: scale(1.001); backface-visibility: hidden; will-change: transform, filter; transition: transform .55s cubic-bezier(.2,.8,.2,1), filter .55s cubic-bezier(.2,.8,.2,1); }
+.ss-spot__link:hover .ss-spot__media { transform: scale(1.035); filter: saturate(1.04) contrast(1.02); }
 .ss-spot__html { line-height: 1.6; }
 .ss-spot__html > :first-child { margin-top: 0; }
 .ss-spot__html > :last-child { margin-bottom: 0; }

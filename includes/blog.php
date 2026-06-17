@@ -173,7 +173,24 @@ function blog_normalize_wp_content(string $html): string
         return $figure . '</figure>';
     }, $html);
 
-    return preg_replace('~\[/?caption[^\]]*\]~i', '', $html);
+    $html = preg_replace('~\[/?caption[^\]]*\]~i', '', $html);
+
+    // Tối ưu LCP: Gỡ loading="lazy" và thêm fetchpriority="high" cho ảnh đầu tiên
+    $html = preg_replace_callback('/<img\b[^>]*>/i', function($m) {
+        static $first_img_found = false;
+        if (!$first_img_found) {
+            $first_img_found = true;
+            $img = $m[0];
+            $img = preg_replace('/\bloading=["\']lazy["\']/i', '', $img);
+            if (stripos($img, 'fetchpriority') === false) {
+                $img = str_replace('<img', '<img fetchpriority="high"', $img);
+            }
+            return $img;
+        }
+        return $m[0];
+    }, $html, 1);
+
+    return $html;
 }
 
 function blog_clean_wp_text(string $text): string

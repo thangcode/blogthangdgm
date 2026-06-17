@@ -534,15 +534,15 @@ if (!isset($seo)) {
     <link rel="alternate" type="application/rss+xml" title="<?php echo e(get_setting('site_name', 'Blog')); ?> &raquo; RSS Feed" href="<?php echo BASE_URL; ?>feed">
     <script src="<?php echo asset_url('assets/js/app.js'); ?>" defer></script>
     <?php if ($custom_script_header): ?>
-        <!-- Custom Header Scripts -->
-        <?php echo $custom_script_header; ?>
+        <!-- Custom Header Scripts (Delayed for PageSpeed) -->
+        <?php echo preg_replace('/<script\b([^>]*)>/i', '<script type="text/delayscript"$1>', $custom_script_header); ?>
     <?php endif; ?>
 </head>
 
 <body class="<?php echo isset($_SESSION['user_id']) ? 'has-adminbar' : ''; ?>">
     <?php if ($custom_script_body): ?>
-        <!-- Custom Body Scripts -->
-        <?php echo $custom_script_body; ?>
+        <!-- Custom Body Scripts (Delayed for PageSpeed) -->
+        <?php echo preg_replace('/<script\b([^>]*)>/i', '<script type="text/delayscript"$1>', $custom_script_body); ?>
     <?php endif; ?>
     <?php if ($preloader_enabled): ?>
         <!-- Premium Preloader -->

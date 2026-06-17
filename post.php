@@ -121,6 +121,8 @@ if ($video_id) {
 }
 
 $page_title = $post['title'];
+$lcp_desktop = !empty($post['thumbnail']) ? blog_thumb($post) : '';
+
 require_once 'includes/header.php';
 ?>
 

@@ -1425,6 +1425,30 @@ if (isset($pdo) && function_exists('render_ad_slot')) {
     } catch (Throwable $e) { /* không để quảng cáo làm vỡ trang */ }
 }
 ?>
+<!-- PageSpeed Insights Script Delay Logic -->
+<script>
+(function() {
+    let executed = false;
+    function executeDelayedScripts() {
+        if (executed) return;
+        executed = true;
+        document.querySelectorAll('script[type="text/delayscript"]').forEach(function(script) {
+            const newScript = document.createElement('script');
+            Array.from(script.attributes).forEach(attr => {
+                if (attr.name !== 'type') {
+                    newScript.setAttribute(attr.name, attr.value);
+                }
+            });
+            newScript.text = script.text;
+            document.body.appendChild(newScript);
+            script.remove();
+        });
+    }
+    const events = ['scroll', 'mousemove', 'mousedown', 'touchstart', 'keydown'];
+    events.forEach(e => window.addEventListener(e, executeDelayedScripts, {once: true, passive: true}));
+    setTimeout(executeDelayedScripts, 3500); // Fallback timeout if no interaction
+})();
+</script>
 </body>
 
 </html>

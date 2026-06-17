@@ -175,20 +175,44 @@ function blog_normalize_wp_content(string $html): string
 
     $html = preg_replace('~\[/?caption[^\]]*\]~i', '', $html);
 
-    // Tối ưu LCP: Gỡ loading="lazy" và thêm fetchpriority="high" cho ảnh đầu tiên
+    // Tối ưu LCP và CLS: 
+    // - Ảnh đầu tiên: gỡ lazy, thêm fetchpriority="high"
+    // - Mọi ảnh: thêm width, height nếu thiếu (giảm CLS)
     $html = preg_replace_callback('/<img\b[^>]*>/i', function($m) {
         static $first_img_found = false;
+        $img = $m[0];
+
+        // 1. Thêm width/height nếu thiếu
+        if (!preg_match('/\bwidth=["\']\d+["\']/', $img) && preg_match('/src=["\']([^"\']+)["\']/', $img, $src_match)) {
+            $src = $src_match[1];
+            // Chỉ lấy kích thước nếu là ảnh local
+            if (strpos($src, BASE_URL) === 0 || strpos($src, '/') === 0 || !preg_match('#^https?://#i', $src)) {
+                $path_part = parse_url($src, PHP_URL_PATH);
+                $local_path = rtrim($_SERVER['DOCUMENT_ROOT'], '/') . $path_part;
+                if (file_exists($local_path)) {
+                    $size = @getimagesize($local_path);
+                    if ($size) {
+                        $img = str_replace('<img', '<img width="' . $size[0] . '" height="' . $size[1] . '"', $img);
+                    }
+                }
+            }
+        }
+
+        // 2. Xử lý LCP / Lazy-load
         if (!$first_img_found) {
             $first_img_found = true;
-            $img = $m[0];
             $img = preg_replace('/\bloading=["\']lazy["\']/i', '', $img);
             if (stripos($img, 'fetchpriority') === false) {
                 $img = str_replace('<img', '<img fetchpriority="high"', $img);
             }
-            return $img;
+        } else {
+            if (stripos($img, 'loading=') === false) {
+                $img = str_replace('<img', '<img loading="lazy" decoding="async"', $img);
+            }
         }
-        return $m[0];
-    }, $html, 1);
+
+        return $img;
+    }, $html);
 
     return $html;
 }

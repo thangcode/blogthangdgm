@@ -12,7 +12,7 @@ if (empty($ad_items) || !is_array($ad_items)) {
 $ad_slot = $ad_slot ?? '';
 $ad_multi = !empty($ad_multi);
 $is_sticky = ($ad_slot === 'sticky_bottom');
-$above_fold = in_array($ad_slot, ['home_top', 'post_inline', 'post_top', 'category_top']);
+$above_fold = in_array($ad_slot, ['home_top', 'post_inline', 'post_top', 'post_above_content', 'category_top']);
 
 $render_one = function (array $b, bool $eager) {
     // Banner kiểu HTML tùy chỉnh: render thẳng, không bọc ảnh/link.
@@ -33,11 +33,20 @@ $render_one = function (array $b, bool $eager) {
     $alt = e((string) ($b['title'] ?? ''));
     $loading = $eager ? 'fetchpriority="high"' : 'loading="lazy" decoding="async"';
 
+    $dims_attr = '';
+    $local_path = rtrim($_SERVER['DOCUMENT_ROOT'], '/') . '/' . ltrim($img, '/');
+    if (file_exists($local_path)) {
+        $size = @getimagesize($local_path);
+        if ($size) {
+            $dims_attr = ' width="' . $size[0] . '" height="' . $size[1] . '"';
+        }
+    }
+
     $picture = '<picture>';
     if ($mobile !== '') {
         $picture .= '<source media="(max-width: 768px)" srcset="' . e($mobile) . '">';
     }
-    $picture .= '<img src="' . e($desktop) . '" alt="' . $alt . '" class="ss-spot__media" ' . $loading . '>';
+    $picture .= '<img src="' . e($desktop) . '" alt="' . $alt . '" class="ss-spot__media" ' . $loading . $dims_attr . '>';
     $picture .= '</picture>';
 
     $link = trim((string) ($b['link_url'] ?? ''));

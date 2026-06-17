@@ -344,13 +344,13 @@ function blog_card(array $p): string
 {
     $url = postUrl($p['slug']);
     $thumb_path = (string) ($p['thumbnail'] ?? '');
-    $thumb = $thumb_path !== '' ? app_resized_image_url($thumb_path, 640) : blog_thumb($p);
-    $srcset = $thumb_path !== '' ? app_image_srcset($thumb_path, [320, 480, 640]) : '';
+    $thumb = $thumb_path !== '' ? app_resized_image_url($thumb_path, 480) : blog_thumb($p);
+    $srcset = $thumb_path !== '' ? app_image_srcset($thumb_path, [320, 360, 480]) : '';
     $alt = $p['thumbnail_alt'] ?? $p['title'];
     ob_start(); ?>
     <article class="card h-100 border-0 shadow-sm blog-card">
         <a href="<?php echo $url; ?>" class="blog-card__thumb" aria-label="<?php echo e($p['title']); ?>">
-            <img src="<?php echo e($thumb); ?>"<?php echo $srcset !== '' ? ' srcset="' . $srcset . '" sizes="(max-width: 575px) 100vw, (max-width: 991px) 50vw, 33vw"' : ''; ?> alt="<?php echo e($alt); ?>" width="640" height="360" loading="lazy" decoding="async">
+            <img src="<?php echo e($thumb); ?>"<?php echo $srcset !== '' ? ' srcset="' . $srcset . '" sizes="(max-width: 575px) calc(100vw - 24px), (max-width: 991px) 50vw, 33vw"' : ''; ?> alt="<?php echo e($alt); ?>" width="480" height="270" loading="lazy" decoding="async">
         </a>
         <div class="card-body d-flex flex-column">
             <h3 class="blog-card__title"><a href="<?php echo $url; ?>"><?php echo e($p['title']); ?></a></h3>
@@ -544,13 +544,13 @@ function blog_card_list(array $p): string
 {
     $url = postUrl($p['slug']);
     $thumb_path = (string) ($p['thumbnail'] ?? '');
-    $thumb = $thumb_path !== '' ? app_resized_image_url($thumb_path, 360) : blog_thumb($p);
-    $srcset = $thumb_path !== '' ? app_image_srcset($thumb_path, [240, 360, 480]) : '';
+    $thumb = $thumb_path !== '' ? app_resized_image_url($thumb_path, 320) : blog_thumb($p);
+    $srcset = $thumb_path !== '' ? app_image_srcset($thumb_path, [200, 240, 320]) : '';
     $alt = $p['thumbnail_alt'] ?? $p['title'];
     ob_start(); ?>
     <article class="blog-card-list">
         <a href="<?php echo $url; ?>" class="blog-card-list__thumb">
-            <img src="<?php echo e($thumb); ?>"<?php echo $srcset !== '' ? ' srcset="' . $srcset . '" sizes="(max-width: 480px) 100vw, 38vw"' : ''; ?> alt="<?php echo e($alt); ?>" width="360" height="248" loading="lazy" decoding="async">
+            <img src="<?php echo e($thumb); ?>"<?php echo $srcset !== '' ? ' srcset="' . $srcset . '" sizes="(max-width: 480px) calc(100vw - 24px), 200px"' : ''; ?> alt="<?php echo e($alt); ?>" width="320" height="220" loading="lazy" decoding="async">
         </a>
         <div class="blog-card-list__body">
             <h3 class="blog-card-list__title"><a href="<?php echo $url; ?>"><?php echo e($p['title']); ?></a></h3>
@@ -571,9 +571,9 @@ function blog_card_overlay(array $p, bool $large = false): string
 {
     $url = postUrl($p['slug']);
     $thumb_path = (string) ($p['thumbnail'] ?? '');
-    $target_width = $large ? 960 : 640;
+    $target_width = $large ? 960 : 480;
     $thumb = $thumb_path !== '' ? app_resized_image_url($thumb_path, $target_width) : blog_thumb($p);
-    $srcset = $thumb_path !== '' ? app_image_srcset($thumb_path, $large ? [480, 768, 960] : [320, 480, 640]) : '';
+    $srcset = $thumb_path !== '' ? app_image_srcset($thumb_path, $large ? [480, 768, 960] : [320, 360, 480]) : '';
     $alt = $p['thumbnail_alt'] ?? $p['title'];
     $cls = $large ? ' blog-card-overlay--lg' : '';
     ob_start(); ?>

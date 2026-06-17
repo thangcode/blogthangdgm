@@ -506,7 +506,7 @@ if (!isset($seo)) {
     <noscript><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css"></noscript>
     <?php
     $script_name = strtolower(basename((string) ($_SERVER['SCRIPT_NAME'] ?? '')));
-    $needs_swiper_assets = in_array($script_name, ['index.php', 'product.php'], true);
+    $needs_swiper_assets = !empty($GLOBALS['require_swiper_assets']) || in_array($script_name, ['product.php'], true);
     ?>
     <?php if ($needs_swiper_assets): ?>
     <!-- Swiper CSS — async (không block render) -->
@@ -558,9 +558,9 @@ if (!isset($seo)) {
                 ?>
                 <?php if ($loader_logo_path): ?>
                     <?php 
-                        $loader_logo_src = (strpos($loader_logo_path, 'http') === 0 || strpos($loader_logo_path, '//') === 0) ? $loader_logo_path : BASE_URL . $loader_logo_path;
+                        $loader_logo_src = (strpos($loader_logo_path, 'http') === 0 || strpos($loader_logo_path, '//') === 0) ? $loader_logo_path : app_resized_image_url((string) $loader_logo_path, 160);
                     ?>
-                    <img src="<?php echo $loader_logo_src; ?>" alt="Loading..." class="loader-logo">
+                    <img src="<?php echo e($loader_logo_src); ?>" alt="Loading..." class="loader-logo"<?php echo app_resized_image_dimensions_attr((string) $loader_logo_path, 160); ?> decoding="async">
                 <?php else: ?>
                     <h2 class="fw-bold text-primary mb-3"><?php echo e($site_name); ?></h2>
                 <?php endif; ?>
@@ -959,9 +959,9 @@ if (!isset($seo)) {
                 <a class="navbar-brand d-flex align-items-center gap-2" href="<?php echo BASE_URL; ?>">
                     <?php if ($site_logo): ?>
                         <?php 
-                            $logo_src = (strpos($site_logo, 'http') === 0 || strpos($site_logo, '//') === 0) ? $site_logo : BASE_URL . $site_logo;
+                            $logo_src = (strpos($site_logo, 'http') === 0 || strpos($site_logo, '//') === 0) ? $site_logo : app_resized_image_url((string) $site_logo, 160);
                         ?>
-                        <img src="<?php echo $logo_src; ?>" alt="<?php echo e($site_name); ?>"<?php echo app_image_dimensions_attr((string) $site_logo); ?> decoding="async">
+                        <img src="<?php echo e($logo_src); ?>" alt="<?php echo e($site_name); ?>"<?php echo app_resized_image_dimensions_attr((string) $site_logo, 160); ?> decoding="async">
                     <?php endif; ?>
                     <span class="fw-bold brand-text">
                         <?php echo e($site_name); ?>

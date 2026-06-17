@@ -21,6 +21,39 @@ if (empty($_GET)) {
     PageCache::start($_cache_key);
 }
 
+try { $homepage_blocks = $pdo->query("SELECT * FROM homepage_blocks WHERE is_visible=1 ORDER BY sort_order ASC")->fetchAll(); }
+catch (Throwable $e) { $homepage_blocks = []; }
+if (empty($homepage_blocks)) {
+    $homepage_blocks = [['block_key'=>'hero'],['block_key'=>'news'],['block_key'=>'faq','layout_style'=>'wave']];
+}
+
+$GLOBALS['require_swiper_assets'] = false;
+foreach ($homepage_blocks as $b) {
+    if (($b['block_key'] ?? '') === 'hero') {
+        $GLOBALS['require_swiper_assets'] = true;
+        break;
+    }
+}
+if (!$GLOBALS['require_swiper_assets']) {
+    $dynamic_keys = [];
+    foreach ($homepage_blocks as $b) {
+        $key = (string) ($b['block_key'] ?? '');
+        if (strpos($key, 'dynamic_') === 0) {
+            $dynamic_keys[] = $key;
+        }
+    }
+    if (!empty($dynamic_keys)) {
+        try {
+            $ph = implode(',', array_fill(0, count($dynamic_keys), '?'));
+            $st = $pdo->prepare("SELECT 1 FROM dynamic_blocks WHERE status=1 AND block_key IN ($ph) AND (card_layout='slide' OR (card_layout='' AND display_mode='slide')) LIMIT 1");
+            $st->execute($dynamic_keys);
+            $GLOBALS['require_swiper_assets'] = (bool) $st->fetchColumn();
+        } catch (Throwable $e) {
+            $GLOBALS['require_swiper_assets'] = true;
+        }
+    }
+}
+
 $seo_data = [
     'title'       => '',
     'description' => 'Blog Thắng Digital Marketing — chia sẻ kiến thức Facebook Ads, Google Ads, kinh doanh online, AI & automation, thiết kế website và SEO.',
@@ -53,12 +86,6 @@ $has_sidebar = $sb_cfg['enabled'] && trim($sb_html) !== '';
 $sb_left = $has_sidebar && $sb_cfg['position'] === 'left';
 
 // ── Lấy block ───────────────────────────────────────────────────────────────
-try { $homepage_blocks = $pdo->query("SELECT * FROM homepage_blocks WHERE is_visible=1 ORDER BY sort_order ASC")->fetchAll(); }
-catch (Throwable $e) { $homepage_blocks = []; }
-if (empty($homepage_blocks)) {
-    $homepage_blocks = [['block_key'=>'hero'],['block_key'=>'news'],['block_key'=>'faq','layout_style'=>'wave']];
-}
-
 // Tách hero (luôn full-width) và phần còn lại
 $hero_blocks = [];
 $content_blocks = [];

@@ -2227,6 +2227,24 @@ function app_image_dimensions_attr(string $image_path): string
     return ' width="' . (int) $size[0] . '" height="' . (int) $size[1] . '"';
 }
 
+function app_resized_image_dimensions_attr(string $image_path, int $target_width): string
+{
+    $full = app_local_image_path($image_path);
+    if (!$full) {
+        return '';
+    }
+    $size = @getimagesize($full);
+    if (!$size || empty($size[0]) || empty($size[1])) {
+        return '';
+    }
+
+    $source_width = (int) $size[0];
+    $source_height = (int) $size[1];
+    $width = max(1, min(max(1, $target_width), $source_width));
+    $height = max(1, (int) round($source_height * $width / $source_width));
+    return ' width="' . $width . '" height="' . $height . '"';
+}
+
 function app_resized_image_url(string $image_path, int $target_width, int $quality = 82): string
 {
     $target_width = max(80, min(1920, $target_width));

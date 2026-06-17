@@ -28,8 +28,8 @@ $col1_with_logo = $col1;
 if ($site_logo !== '') {
     $footer_logo_src = (strpos($site_logo, 'http') === 0 || strpos($site_logo, '//') === 0)
         ? $site_logo
-        : BASE_URL . ltrim($site_logo, '/');
-    $col1_with_logo = '<div class="footer-about-logo mb-3"><img src="' . e($footer_logo_src) . '" alt="' . e($site_name) . '" loading="lazy" decoding="async"></div>' . $col1;
+        : app_resized_image_url($site_logo, 160);
+    $col1_with_logo = '<div class="footer-about-logo mb-3"><img src="' . e($footer_logo_src) . '" alt="' . e($site_name) . '"' . app_resized_image_dimensions_attr($site_logo, 160) . ' loading="lazy" decoding="async"></div>' . $col1;
 }
 $contact_phone = get_setting('contact_phone', '');
 $contact_address = get_setting('contact_address', '');
@@ -217,7 +217,7 @@ $custom_script_footer = filter_public_custom_script_markup(get_setting('custom_s
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js" defer></script>
 <?php
 $script_name = strtolower(basename((string) ($_SERVER['SCRIPT_NAME'] ?? '')));
-$needs_swiper_js = in_array($script_name, ['index.php', 'product.php'], true);
+$needs_swiper_js = !empty($GLOBALS['require_swiper_assets']) || in_array($script_name, ['product.php'], true);
 $needs_cart_js = false;
 $needs_register_js = !empty($GLOBALS['require_register_js']);
 $needs_price_js = !empty($GLOBALS['require_price_js']);

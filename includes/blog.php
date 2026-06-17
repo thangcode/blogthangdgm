@@ -101,28 +101,30 @@ function blog_build_toc(string $html): array
         $id = $base;
         $i = 2;
         while (isset($used[$id])) { $id = $base . '-' . $i; $i++; }
-        $used[$id] = true;
 
         // Gắn id vào heading đầu tiên khớp (chưa có id)
         $orig = $mt[0];
-        if (stripos($orig, ' id=') === false) {
+        if (preg_match('/\sid=["\']([^"\']+)["\']/i', $orig, $id_match) && trim($id_match[1]) !== '') {
+            $id = trim(html_entity_decode($id_match[1], ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+        } else {
             $new = preg_replace('/<h' . $level . '\b/i', '<h' . $level . ' id="' . $id . '"', $orig, 1);
             $pos = strpos($html, $orig);
             if ($pos !== false) {
                 $html = substr_replace($html, $new, $pos, strlen($orig));
             }
         }
+        $used[$id] = true;
         $items[] = ['level' => $level, 'text' => $text, 'id' => $id];
     }
     if (count($items) < 3) {
         return ['', $html]; // bài ngắn -> không cần TOC
     }
-    $toc = '<nav class="blog-toc" aria-label="Mục lục"><div class="blog-toc__title"><i class="bi bi-list-ul"></i> Mục lục</div><ul>';
+    $toc = '<nav class="blog-toc" aria-labelledby="blogTocTitle"><details class="blog-toc__details"><summary class="blog-toc__title" id="blogTocTitle"><span><i class="bi bi-list-ul"></i> Mục lục</span><span class="blog-toc__toggle" aria-hidden="true"></span></summary><ol>';
     foreach ($items as $it) {
         $cls = $it['level'] === 3 ? ' class="toc-sub"' : '';
         $toc .= '<li' . $cls . '><a href="#' . $it['id'] . '">' . htmlspecialchars($it['text'], ENT_QUOTES, 'UTF-8') . '</a></li>';
     }
-    $toc .= '</ul></nav>';
+    $toc .= '</ol></details></nav>';
     return [$toc, $html];
 }
 

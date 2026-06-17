@@ -905,6 +905,97 @@ input {
     display: block;
 }
 
+.blog-single .blog-toc {
+    background: #fff;
+    border: 1px solid var(--blog-line, #e5e7eb);
+    border-left: 3px solid var(--blog-primary, var(--primary-color));
+    border-radius: 10px;
+    padding: .85rem 1rem;
+    margin: 1rem 0 1.2rem;
+}
+
+.blog-single .blog-toc__title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: .45rem;
+    font-size: 1rem;
+    font-weight: 800;
+    line-height: 1.25;
+    color: var(--blog-ink, #0f172a);
+    margin: 0;
+    cursor: pointer;
+    list-style: none;
+    user-select: none;
+}
+
+.blog-single .blog-toc__title::-webkit-details-marker {
+    display: none;
+}
+
+.blog-single .blog-toc__title span:first-child {
+    display: inline-flex;
+    align-items: center;
+    gap: .45rem;
+}
+
+.blog-single .blog-toc__title i {
+    color: var(--blog-primary, var(--primary-color));
+    font-size: 1rem;
+}
+
+.blog-single .blog-toc__toggle::before {
+    content: "+";
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.35rem;
+    height: 1.35rem;
+    border-radius: 999px;
+    background: #f1f5f9;
+    color: var(--blog-primary, var(--primary-color));
+    font-weight: 800;
+}
+
+.blog-single .blog-toc__details[open] .blog-toc__toggle::before {
+    content: "−";
+}
+
+.blog-single .blog-toc ol,
+.blog-single .blog-toc ul {
+    list-style: none;
+    margin: .45rem 0 0;
+    padding: 0;
+}
+
+.blog-single .blog-toc li {
+    margin: 0;
+}
+
+.blog-single .blog-toc li.toc-sub {
+    padding-left: .85rem;
+}
+
+.blog-single .blog-toc a {
+    display: block;
+    color: #334155;
+    text-decoration: none !important;
+    background-image: none !important;
+    background-size: 0 !important;
+    font-size: .9rem;
+    line-height: 1.35;
+    padding: .26rem .35rem;
+    border-radius: 7px;
+}
+
+.blog-single .blog-toc a:hover,
+.blog-single .blog-toc a:focus {
+    color: var(--blog-primary, var(--primary-color));
+    text-decoration: none !important;
+    background-image: none !important;
+    background: #f8fafc;
+}
+
 .blog-card__title {
     font-size: 1.02rem;
     font-weight: 700;

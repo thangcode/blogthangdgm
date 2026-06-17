@@ -83,7 +83,7 @@ foreach ($ad_items as $_b) {
 </script>
 <?php else: ?>
 <div class="<?php echo $wrap_class; ?>">
-    <?php if (!$only_html): ?><span class="ss-spot__tag">Tài trợ</span><?php endif; ?>
+    <?php if (!$only_html): ?><span class="ss-spot__tag">@thangdigitalmarketing</span><?php endif; ?>
     <?php if ($ad_multi && count($ad_items) > 1): ?>
         <div class="ss-spot__list">
             <?php foreach ($ad_items as $i => $b): ?>
@@ -100,7 +100,7 @@ foreach ($ad_items as $_b) {
 $GLOBALS['_ss_spot_css_emitted'] = true; ?>
 <style>
 .ss-spot { position: relative; margin: 1.25rem 0; }
-.ss-spot__tag { position: absolute; top: 6px; right: 8px; z-index: 2; font-size: .58rem; letter-spacing: .04em; text-transform: uppercase; color: #fff; background: rgba(15,23,42,.55); padding: 1px 7px; border-radius: 999px; pointer-events: none; }
+.ss-spot__tag { position: absolute; top: 6px; right: 8px; z-index: 2; font-size: .58rem; letter-spacing: .04em; text-transform: none; color: #fff; background: rgba(15,23,42,.55); padding: 1px 7px; border-radius: 999px; pointer-events: none; }
 .ss-spot__link { display: block; border-radius: 12px; overflow: hidden; line-height: 0; box-shadow: 0 4px 16px rgba(0,0,0,.06); transition: transform .2s ease, box-shadow .2s ease; }
 .ss-spot__link:hover { transform: translateY(-2px); box-shadow: 0 10px 24px rgba(0,0,0,.12); }
 .ss-spot__media { width: 100%; height: auto; display: block; }

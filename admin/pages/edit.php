@@ -78,8 +78,18 @@ $v = fn($k) => e($_POST[$k] ?? ($page[$k] ?? ''));
                         onkeyup="if(document.getElementById('slug').dataset.t!=='1'){document.getElementById('slug').value=createSlug(this.value)}"></div>
                 <div class="mb-3"><label class="form-label">Slug</label>
                     <input type="text" class="form-control" name="slug" id="slug" value="<?php echo $v('slug'); ?>" oninput="this.dataset.t='1'"></div>
-                <div class="mb-3"><label class="form-label">Nội dung</label>
-                    <textarea class="form-control" name="content" id="content" rows="14"><?php echo e($_POST['content'] ?? ($page['content'] ?? '')); ?></textarea></div>
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between align-items-center mb-1 flex-wrap gap-1">
+                        <label class="form-label mb-0">Nội dung</label>
+                        <?php if ($is_edit): ?>
+                        <div class="d-flex gap-1 flex-wrap">
+                            <button type="button" class="btn btn-sm btn-primary" id="btnAiRewriteContent" data-id="<?php echo (int) $page['id']; ?>"><i class="bi bi-pencil-square me-1"></i>Viết nội dung (AI)</button>
+                            <button type="button" class="btn btn-sm btn-success" id="btnAiRewriteSeo" data-id="<?php echo (int) $page['id']; ?>"><i class="bi bi-stars me-1"></i>Viết bài + Auto SEO</button>
+                        </div>
+                        <?php endif; ?>
+                    </div>
+                    <textarea class="form-control" name="content" id="content" rows="14"><?php echo e($_POST['content'] ?? ($page['content'] ?? '')); ?></textarea>
+                </div>
                 <div class="mb-3"><label class="form-label">Tóm tắt</label>
                     <textarea class="form-control" name="summary" rows="2"><?php echo e($_POST['summary'] ?? ($page['summary'] ?? '')); ?></textarea></div>
                 <?php include '../includes/seo-fields.php'; ?>
@@ -106,4 +116,50 @@ window.addEventListener('load', function(){
     });
 });
 </script>
+<?php if ($is_edit): ?>
+<script>
+(function () {
+    const FORM_CSRF = <?php echo json_encode(generate_csrf_token()); ?>;
+    function doRewrite(btn, withSeo) {
+        const msg = withSeo
+            ? 'AI sẽ viết lại NỘI DUNG trang, tạo SEO và LƯU NGAY. Tiếp tục?'
+            : 'AI sẽ viết lại NỘI DUNG trang và LƯU NGAY. Tiếp tục?';
+        if (!confirm(msg)) return;
+        const old = btn.innerHTML;
+        btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>' + (withSeo ? 'AI đang viết + SEO...' : 'AI đang viết...');
+        const body = new URLSearchParams({ action: withSeo ? 'all' : 'rewrite', id: btn.dataset.id, save: '1', csrf_token: FORM_CSRF });
+        fetch('../ajax/page-ai.php', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: body.toString() })
+            .then(r => r.json())
+            .then(d => {
+                if (d.success && d.content) {
+                    if (window.tinymce && tinymce.get('content')) tinymce.get('content').setContent(d.content);
+                    else document.getElementById('content').value = d.content;
+                    const sumEl = document.querySelector('textarea[name="summary"]');
+                    if (sumEl && !sumEl.value.trim() && d.description) sumEl.value = d.description;
+                    if (withSeo) {
+                        const t = document.getElementById('metaTitle');
+                        if (t && d.meta_title) { t.value = d.meta_title; t.dispatchEvent(new Event('input')); }
+                        const ds = document.getElementById('metaDescription');
+                        if (ds && d.meta_description) { ds.value = d.meta_description; ds.dispatchEvent(new Event('input')); }
+                        if (typeof setTagInputValues === 'function') {
+                            if (d.meta_keywords) setTagInputValues('metaKeywordsHidden', String(d.meta_keywords).split(',').map(s => s.trim()).filter(Boolean));
+                        }
+                        alert('Đã viết trang + SEO và LƯU. Bạn có thể chỉnh thêm rồi bấm "Lưu trang".');
+                    } else {
+                        alert('Đã viết nội dung mới và LƯU. Bạn có thể chỉnh thêm rồi bấm "Lưu trang".');
+                    }
+                } else {
+                    alert(d.message || 'Không thể gọi AI.');
+                }
+            })
+            .catch(() => alert('Lỗi kết nối khi gọi AI.'))
+            .finally(() => { btn.disabled = false; btn.innerHTML = old; });
+    }
+    const b1 = document.getElementById('btnAiRewriteContent');
+    const b2 = document.getElementById('btnAiRewriteSeo');
+    if (b1) b1.addEventListener('click', () => doRewrite(b1, false));
+    if (b2) b2.addEventListener('click', () => doRewrite(b2, true));
+})();
+</script>
+<?php endif; ?>
 <?php require_once '../includes/footer.php'; ?>

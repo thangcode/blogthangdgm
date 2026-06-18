@@ -77,7 +77,7 @@ if (isset($pdo)) {
                 <!-- Checklist -->
                 <div class="score-checklist" id="seoChecklist">
                     <div class="check-item" id="chk-keyword"><i class="bi bi-circle"></i> Focus Keyphrase</div>
-                    <div class="check-item" id="chk-title"><i class="bi bi-circle"></i> Meta Title (50–60 ký tự)</div>
+                    <div class="check-item" id="chk-title"><i class="bi bi-circle"></i> Meta Title (50–65 ký tự)</div>
                     <div class="check-item" id="chk-title-kw"><i class="bi bi-circle"></i> Từ khóa trong Title</div>
                     <div class="check-item" id="chk-desc"><i class="bi bi-circle"></i> Meta Description (120–160 ký tự)
                     </div>
@@ -128,7 +128,7 @@ if (isset($pdo)) {
             <div class="mb-3">
                 <label class="form-label fw-bold">
                     <i class="bi bi-fonts me-1 text-info"></i> Meta Title
-                    <span class="float-end small text-muted"><span id="metaTitleCount">0</span>/60</span>
+                    <span class="float-end small text-muted"><span id="metaTitleCount">0</span>/65</span>
                 </label>
                 <input type="text" class="form-control seo-field" name="meta_title" id="metaTitle"
                     value="<?php echo e($meta_title); ?>" maxlength="70"
@@ -136,7 +136,7 @@ if (isset($pdo)) {
                 <div class="seo-progress-wrap mt-1">
                     <div class="seo-progress-bar" id="metaTitleProgress" style="width:0%"></div>
                 </div>
-                <small class="text-muted">Tối ưu: 50–60 ký tự. Nên chứa từ khóa chính.</small>
+                <small class="text-muted">Tối ưu: 50–65 ký tự. Nên chứa từ khóa chính, giữ số bài/phần nếu là series.</small>
             </div>
 
             <!-- Meta Description -->
@@ -783,7 +783,7 @@ if (isset($pdo)) {
             const desc = ($('metaDescription') || { value: '' }).value;
             const keys = ($('metaKeywordsHidden') || { value: '' }).value;
 
-            updateProgressBar('metaTitleProgress', title.trim().length, 50, 60);
+            updateProgressBar('metaTitleProgress', title.trim().length, 50, 65);
             updateProgressBar('metaDescProgress', desc.trim().length, 120, 160);
             $('metaTitleCount') && ($('metaTitleCount').textContent = title.length);
             $('metaDescCount') && ($('metaDescCount').textContent = desc.length);

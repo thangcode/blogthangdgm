@@ -238,6 +238,95 @@ if (!function_exists('seo_truncate')) {
     }
 }
 
+if (!function_exists('seo_normalize_text')) {
+    function seo_normalize_text(string $str): string
+    {
+        return trim((string) preg_replace('/\s+/u', ' ', strip_tags($str)));
+    }
+}
+
+if (!function_exists('seo_extract_series_markers')) {
+    function seo_extract_series_markers(string $title): array
+    {
+        $title = seo_normalize_text($title);
+        $markers = [];
+
+        if (preg_match_all('/\b20\d{2}\b/u', $title, $m)) {
+            foreach ($m[0] as $year) {
+                $markers[] = $year;
+            }
+        }
+
+        if (preg_match_all('/\b(?:bài|bai|phần|phan|tập|tap|part|episode|ep)\s*[-#:]*\s*\d+[a-z]?/iu', $title, $m)) {
+            foreach ($m[0] as $part) {
+                $markers[] = seo_normalize_text($part);
+            }
+        }
+
+        return array_values(array_unique($markers));
+    }
+}
+
+if (!function_exists('seo_text_has_marker')) {
+    function seo_text_has_marker(string $text, string $marker): bool
+    {
+        $text = function_exists('mb_strtolower') ? mb_strtolower(seo_normalize_text($text), 'UTF-8') : strtolower(seo_normalize_text($text));
+        $marker = function_exists('mb_strtolower') ? mb_strtolower(seo_normalize_text($marker), 'UTF-8') : strtolower(seo_normalize_text($marker));
+        return $marker !== '' && mb_strpos($text, $marker) !== false;
+    }
+}
+
+if (!function_exists('seo_compact_source_title')) {
+    function seo_compact_source_title(string $title): string
+    {
+        $title = seo_normalize_text($title);
+        $title = preg_replace('/^(hướng\s*dẫn|huong\s*dan)\s+/iu', '', $title);
+        if (preg_match('/\b[a-z0-9]+\s+ads\b/iu', $title)) {
+            $title = preg_replace('/^(quảng\s*cáo|quang\s*cao)\s+/iu', '', (string) $title);
+        }
+        return seo_normalize_text((string) $title);
+    }
+}
+
+if (!function_exists('seo_apply_series_markers')) {
+    function seo_apply_series_markers(string $sourceTitle, string $aiTitle, string $focusKeyword = '', int $max = 65): string
+    {
+        $sourceTitle = seo_normalize_text($sourceTitle);
+        $aiTitle = seo_normalize_text($aiTitle);
+        $markers = seo_extract_series_markers($sourceTitle);
+
+        if (empty($markers)) {
+            return seo_truncate($aiTitle !== '' ? $aiTitle : $sourceTitle, $max);
+        }
+
+        $sourceCompact = seo_compact_source_title($sourceTitle);
+        if ($sourceCompact !== '' && mb_strlen($sourceCompact, 'UTF-8') <= $max) {
+            return $sourceCompact;
+        }
+
+        $candidate = $aiTitle !== '' ? $aiTitle : $sourceCompact;
+        foreach ($markers as $marker) {
+            if (!seo_text_has_marker($candidate, $marker)) {
+                $candidate .= ' - ' . $marker;
+            }
+        }
+        $candidate = seo_normalize_text($candidate);
+        if (mb_strlen($candidate, 'UTF-8') <= $max) {
+            return $candidate;
+        }
+
+        if (preg_match('/\b[a-z0-9]+\s+ads\b/iu', $candidate)) {
+            $candidate = preg_replace('/^(hướng\s*dẫn\s+)?(quảng\s*cáo|quang\s*cao)\s+/iu', '', $candidate);
+            $candidate = seo_normalize_text((string) $candidate);
+            if (mb_strlen($candidate, 'UTF-8') <= $max) {
+                return $candidate;
+            }
+        }
+
+        return seo_truncate($candidate, $max);
+    }
+}
+
 if (!function_exists('ai_generate_seo')) {
     /**
      * Sinh dữ liệu SEO (meta_title, meta_description, focus_keyword, meta_keywords).
@@ -260,6 +349,7 @@ if (!function_exists('ai_generate_seo')) {
             . "3. meta_description: 130-150 ký tự, kết thúc bằng câu hoàn chỉnh (có dấu . hoặc !), chứa chính xác focus_keyword. Cấu trúc: lợi ích + tính năng + CTA ngắn.\n"
             . "4. meta_keywords: mảng 6-8 từ khóa phụ liên quan.\n"
             . "CHỈ trả về JSON: {\"focus_keyword\":\"\",\"meta_title\":\"\",\"meta_description\":\"\",\"meta_keywords\":[]}. Không giải thích.";
+        $system_prompt .= "\nSERIES RULE: If the source title contains a year, Bai/Phan/Tap/Part/Ep number, keep those markers in meta_title.";
 
         $res = llm_chat([
             ['role' => 'system', 'content' => $system_prompt],
@@ -278,11 +368,13 @@ if (!function_exists('ai_generate_seo')) {
         }
         $kw = $seo['meta_keywords'] ?? [];
         if (is_string($kw)) { $kw = array_filter(array_map('trim', explode(',', $kw))); }
+        $focus = trim((string) ($seo['focus_keyword'] ?? ''));
+        $metaTitle = seo_apply_series_markers($title, (string) ($seo['meta_title'] ?? ''), $focus, 65);
         return [
             'ok'               => true,
-            'meta_title'       => seo_truncate((string) ($seo['meta_title'] ?? ''), 60),
+            'meta_title'       => $metaTitle,
             'meta_description' => seo_truncate((string) ($seo['meta_description'] ?? ''), 160),
-            'focus_keyword'    => trim((string) ($seo['focus_keyword'] ?? '')),
+            'focus_keyword'    => $focus,
             'meta_keywords'    => array_values((array) $kw),
             'model'            => $res['model_used'] ?? '',
         ];

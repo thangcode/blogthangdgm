@@ -300,9 +300,6 @@ if (!function_exists('seo_apply_series_markers')) {
         }
 
         $sourceCompact = seo_compact_source_title($sourceTitle);
-        if ($sourceCompact !== '' && mb_strlen($sourceCompact, 'UTF-8') <= $max) {
-            return $sourceCompact;
-        }
 
         $candidate = $aiTitle !== '' ? $aiTitle : $sourceCompact;
         foreach ($markers as $marker) {

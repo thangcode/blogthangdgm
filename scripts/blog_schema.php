@@ -151,6 +151,7 @@ function blog_ensure_schema(PDO $pdo): array
             `meta_title` VARCHAR(255) NULL,
             `meta_description` TEXT NULL,
             `meta_keywords` VARCHAR(255) NULL,
+            `focus_keyword` VARCHAR(255) NULL,
             `status` TINYINT NOT NULL DEFAULT 1,
             `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
             `updated_at` DATETIME NULL,

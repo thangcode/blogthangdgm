@@ -25,6 +25,11 @@ $action = $_POST['action'] ?? '';
 $id = (int) ($_POST['id'] ?? 0);
 $save = ($_POST['save'] ?? '1') !== '0';
 
+// Đảm bảo cột focus_keyword tồn tại (tính năng SEO trang) — an toàn khi cột đã có.
+if (function_exists('has_table_column') && !has_table_column($pdo, 'pages', 'focus_keyword')) {
+    try { $pdo->exec("ALTER TABLE pages ADD COLUMN focus_keyword VARCHAR(255) DEFAULT NULL AFTER meta_keywords"); } catch (Exception $e) {}
+}
+
 $stmt = $pdo->prepare("SELECT * FROM pages WHERE id = ? LIMIT 1");
 $stmt->execute([$id]);
 $page = $stmt->fetch();
@@ -69,8 +74,8 @@ try {
 
         if ($save) {
             if ($seoOk) {
-                $pdo->prepare("UPDATE pages SET content=?, summary=?, meta_title=?, meta_description=?, meta_keywords=?, updated_at=NOW() WHERE id=?")
-                    ->execute([$newContent, $summary, $seo['meta_title'], $seo['meta_description'], $kw, $id]);
+                $pdo->prepare("UPDATE pages SET content=?, summary=?, meta_title=?, meta_description=?, meta_keywords=?, focus_keyword=?, updated_at=NOW() WHERE id=?")
+                    ->execute([$newContent, $summary, $seo['meta_title'], $seo['meta_description'], $kw, $seo['focus_keyword'], $id]);
             } else {
                 $pdo->prepare("UPDATE pages SET content=?, summary=?, updated_at=NOW() WHERE id=?")
                     ->execute([$newContent, $summary, $id]);
@@ -81,7 +86,7 @@ try {
         echo json_encode(['success' => true, 'message' => 'Đã viết trang + SEO' . ($seoOk ? '.' : ' (SEO lỗi, đã lưu nội dung).'),
             'id' => $id, 'title' => $page['title'], 'content' => $newContent, 'description' => $r['description'],
             'meta_title' => $seoOk ? $seo['meta_title'] : '', 'meta_description' => $seoOk ? $seo['meta_description'] : '',
-            'meta_keywords' => $kw, 'saved' => $save], JSON_UNESCAPED_UNICODE);
+            'meta_keywords' => $kw, 'focus_keyword' => $seoOk ? $seo['focus_keyword'] : '', 'saved' => $save], JSON_UNESCAPED_UNICODE);
         exit;
     }
 
@@ -91,14 +96,14 @@ try {
         $kw = is_array($seo['meta_keywords']) ? implode(', ', $seo['meta_keywords']) : (string) $seo['meta_keywords'];
 
         if ($save) {
-            $pdo->prepare("UPDATE pages SET meta_title = ?, meta_description = ?, meta_keywords = ?, updated_at = NOW() WHERE id = ?")
-                ->execute([$seo['meta_title'], $seo['meta_description'], $kw, $id]);
+            $pdo->prepare("UPDATE pages SET meta_title = ?, meta_description = ?, meta_keywords = ?, focus_keyword = ?, updated_at = NOW() WHERE id = ?")
+                ->execute([$seo['meta_title'], $seo['meta_description'], $kw, $seo['focus_keyword'], $id]);
             if (class_exists('PageCache')) { try { PageCache::flush(); } catch (Throwable $e) {} }
             if (function_exists('log_activity')) log_activity('ai_seo', 'page', $id, 'AI SEO trang: ' . $page['title']);
         }
         echo json_encode(['success' => true, 'message' => 'Đã tạo SEO.', 'id' => $id, 'title' => $page['title'],
             'meta_title' => $seo['meta_title'], 'meta_description' => $seo['meta_description'],
-            'meta_keywords' => $kw, 'saved' => $save], JSON_UNESCAPED_UNICODE);
+            'meta_keywords' => $kw, 'focus_keyword' => $seo['focus_keyword'], 'saved' => $save], JSON_UNESCAPED_UNICODE);
         exit;
     }
 

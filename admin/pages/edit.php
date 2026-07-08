@@ -9,9 +9,14 @@ require_once '../../includes/page-cache.php';
 $current_page = 'pages';
 require_once '../includes/header.php';
 
+// Đảm bảo cột focus_keyword tồn tại (tính năng SEO trang) — an toàn khi cột đã có.
+if (function_exists('has_table_column') && !has_table_column($pdo, 'pages', 'focus_keyword')) {
+    try { $pdo->exec("ALTER TABLE pages ADD COLUMN focus_keyword VARCHAR(255) DEFAULT NULL AFTER meta_keywords"); } catch (Exception $e) {}
+}
+
 $error = ''; $success = '';
 $id = (int) ($_GET['id'] ?? 0);
-$page = ['id'=>0,'title'=>'','slug'=>'','summary'=>'','content'=>'','meta_title'=>'','meta_description'=>'','meta_keywords'=>'','status'=>1];
+$page = ['id'=>0,'title'=>'','slug'=>'','summary'=>'','content'=>'','meta_title'=>'','meta_description'=>'','meta_keywords'=>'','focus_keyword'=>'','status'=>1];
 $is_edit = false;
 if ($id > 0) {
     $s = $pdo->prepare("SELECT * FROM pages WHERE id = ?");
@@ -30,6 +35,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $mt = trim($_POST['meta_title'] ?? '');
     $md = trim($_POST['meta_description'] ?? '');
     $mk = trim($_POST['meta_keywords'] ?? '');
+    $fk = trim($_POST['focus_keyword'] ?? '');
 
     if ($title === '') $error = 'Vui lòng nhập tiêu đề.';
     elseif ($slug === '') $error = 'Slug không hợp lệ.';
@@ -40,11 +46,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ((int)$c->fetchColumn() > 0) $slug .= '-' . substr(uniqid(), -4);
         try {
             if ($is_edit) {
-                $pdo->prepare("UPDATE pages SET title=?, slug=?, summary=?, content=?, meta_title=?, meta_description=?, meta_keywords=?, status=?, updated_at=NOW() WHERE id=?")
-                    ->execute([$title,$slug,$summary,$content,$mt,$md,$mk,$status,$id]);
+                $pdo->prepare("UPDATE pages SET title=?, slug=?, summary=?, content=?, meta_title=?, meta_description=?, meta_keywords=?, focus_keyword=?, status=?, updated_at=NOW() WHERE id=?")
+                    ->execute([$title,$slug,$summary,$content,$mt,$md,$mk,$fk,$status,$id]);
             } else {
-                $pdo->prepare("INSERT INTO pages (title,slug,summary,content,meta_title,meta_description,meta_keywords,status,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,NOW(),NOW())")
-                    ->execute([$title,$slug,$summary,$content,$mt,$md,$mk,$status]);
+                $pdo->prepare("INSERT INTO pages (title,slug,summary,content,meta_title,meta_description,meta_keywords,focus_keyword,status,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,NOW(),NOW())")
+                    ->execute([$title,$slug,$summary,$content,$mt,$md,$mk,$fk,$status]);
                 $id = (int)$pdo->lastInsertId(); $is_edit = true;
             }
             if (class_exists('PageCache')) { try { PageCache::flush(); } catch (Throwable $e) {} }
@@ -54,7 +60,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-$seo_data = ['meta_title'=>$page['meta_title'] ?? '','meta_description'=>$page['meta_description'] ?? '','meta_keywords'=>$page['meta_keywords'] ?? '','focus_keyword'=>'','preview_title'=>$page['title'] ?? '','preview_url'=>BASE_URL.ltrim($page['slug'] ?? '','/').'/'];
+$seo_data = ['meta_title'=>$page['meta_title'] ?? '','meta_description'=>$page['meta_description'] ?? '','meta_keywords'=>$page['meta_keywords'] ?? '','focus_keyword'=>$page['focus_keyword'] ?? '','preview_title'=>$page['title'] ?? '','preview_url'=>BASE_URL.ltrim($page['slug'] ?? '','/').'/'];
 $v = fn($k) => e($_POST[$k] ?? ($page[$k] ?? ''));
 ?>
 <div class="container-fluid">
@@ -142,6 +148,7 @@ window.addEventListener('load', function(){
                         const ds = document.getElementById('metaDescription');
                         if (ds && d.meta_description) { ds.value = d.meta_description; ds.dispatchEvent(new Event('input')); }
                         if (typeof setTagInputValues === 'function') {
+                            if (d.focus_keyword) setTagInputValues('focusKeywordHidden', [d.focus_keyword]);
                             if (d.meta_keywords) setTagInputValues('metaKeywordsHidden', String(d.meta_keywords).split(',').map(s => s.trim()).filter(Boolean));
                         }
                         alert('Đã viết trang + SEO và LƯU. Bạn có thể chỉnh thêm rồi bấm "Lưu trang".');

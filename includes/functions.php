@@ -3069,5 +3069,3 @@ function maybe_prune_traffic_data(PDO $pdo, int $defaultDays = 90, int $throttle
 
 // Hệ thống Banner Quảng cáo (ad slot) — helper + schema.
 require_once __DIR__ . '/ad-banners.php';
-?>
-

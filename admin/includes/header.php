@@ -575,6 +575,10 @@ catch (Exception $e) { /* Ignore sidebar error */
                 class="nav-link-admin <?php echo ($current_page == 'settings') ? 'active' : ''; ?>">
                 <i class="bi bi-gear"></i> Cấu hình
             </a>
+            <a href="<?php echo BASE_URL; ?>admin/ai/index.php"
+                class="nav-link-admin <?php echo ($current_page == 'ai') ? 'active' : ''; ?>">
+                <i class="bi bi-robot"></i> Cấu hình AI
+            </a>
             <?php $seo_open = in_array($current_page, ['seo', 'seo-redirects']); ?>
             <button class="nav-link-admin nav-group-toggle w-100 text-start border-0 bg-transparent"
                     data-bs-toggle="collapse" data-bs-target="#seoGroup"

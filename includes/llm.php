@@ -13,8 +13,223 @@
  *   if ($res['ok']) { echo $res['text']; }
  */
 
+/* ============================================================================
+ * TẦNG PROVIDER / MODEL (mới)
+ * - ai_providers: nhà cung cấp (openai|anthropic), endpoint, api key (mã hóa)
+ * - ai_models:    model thuộc provider (chat|image, can_vision)
+ * - settings ai_<feature>_primary / ai_<feature>_fallback: gán model theo tính năng
+ * Các hàm cũ (llm_chat/llm_chat_raw) vẫn giữ để tương thích ngược.
+ * ========================================================================== */
+
+if (!function_exists('llm_pdo')) {
+    /** Lấy PDO dùng chung; tự kết nối lại nếu chưa có. */
+    function llm_pdo(): ?PDO
+    {
+        global $pdo;
+        if ($pdo instanceof PDO) {
+            return $pdo;
+        }
+        if (function_exists('db_connect')) {
+            try { $pdo = db_connect(); return $pdo; } catch (Throwable $e) { return null; }
+        }
+        return null;
+    }
+}
+
+if (!function_exists('llm_get_provider')) {
+    /** Đọc 1 provider theo id, giải mã api_key -> khóa 'api_key'. */
+    function llm_get_provider(PDO $pdo, int $id): ?array
+    {
+        if ($id <= 0) return null;
+        try {
+            $st = $pdo->prepare("SELECT * FROM ai_providers WHERE id = ? LIMIT 1");
+            $st->execute([$id]);
+            $row = $st->fetch();
+        } catch (Throwable $e) { return null; }
+        if (!$row) return null;
+        $row['api_key'] = function_exists('app_decrypt') ? app_decrypt((string) ($row['api_key_enc'] ?? '')) : (string) ($row['api_key_enc'] ?? '');
+        return $row;
+    }
+}
+
+if (!function_exists('llm_get_model')) {
+    /** Đọc 1 model theo id kèm provider (đã giải mã key) -> khóa 'provider'. */
+    function llm_get_model(PDO $pdo, int $id): ?array
+    {
+        if ($id <= 0) return null;
+        try {
+            $st = $pdo->prepare("SELECT * FROM ai_models WHERE id = ? LIMIT 1");
+            $st->execute([$id]);
+            $row = $st->fetch();
+        } catch (Throwable $e) { return null; }
+        if (!$row) return null;
+        $row['provider'] = llm_get_provider($pdo, (int) $row['provider_id']);
+        return $row;
+    }
+}
+
+if (!function_exists('llm_pick_enabled_model')) {
+    /**
+     * Chọn 1 model đang bật cùng loại làm dự phòng an toàn khi model gán bị thiếu/tắt.
+     * $kind: 'chat'|'image'; $preferVision: ưu tiên can_vision=1 (cho tính năng vision).
+     */
+    function llm_pick_enabled_model(PDO $pdo, string $kind, bool $preferVision = false): ?array
+    {
+        try {
+            $sql = "SELECT m.* FROM ai_models m
+                    JOIN ai_providers p ON p.id = m.provider_id
+                    WHERE m.status = 1 AND p.status = 1 AND m.kind = ?
+                    ORDER BY " . ($preferVision ? "m.can_vision DESC, " : "") . "m.sort_order ASC, m.id ASC
+                    LIMIT 1";
+            $st = $pdo->prepare($sql);
+            $st->execute([$kind]);
+            $row = $st->fetch();
+        } catch (Throwable $e) { return null; }
+        if (!$row) return null;
+        $row['provider'] = llm_get_provider($pdo, (int) $row['provider_id']);
+        return $row;
+    }
+}
+
+if (!function_exists('llm_resolve_feature')) {
+    /**
+     * Phân giải model chính + dự phòng cho 1 tính năng.
+     * $feature: 'write'|'seo'|'vision'|'image'
+     * Auto-fallback an toàn: model gán null/tắt -> lấy model bật cùng loại.
+     * @return array{primary:?array,fallback:?array}
+     */
+    function llm_resolve_feature(PDO $pdo, string $feature): array
+    {
+        $kind = ($feature === 'image') ? 'image' : 'chat';
+        $preferVision = ($feature === 'vision');
+
+        $primaryId  = (int) get_setting('ai_' . $feature . '_primary', '0');
+        $fallbackId = (int) get_setting('ai_' . $feature . '_fallback', '0');
+
+        $isUsable = function (?array $m): bool {
+            return $m && (int) ($m['status'] ?? 0) === 1
+                && !empty($m['provider']) && (int) ($m['provider']['status'] ?? 0) === 1;
+        };
+
+        $primary  = llm_get_model($pdo, $primaryId);
+        $fallback = llm_get_model($pdo, $fallbackId);
+        if (!$isUsable($primary))  { $primary  = null; }
+        if (!$isUsable($fallback)) { $fallback = null; }
+
+        // Nếu thiếu model chính -> dùng model bật cùng loại (tránh chết tính năng).
+        if (!$primary) {
+            $primary = llm_pick_enabled_model($pdo, $kind, $preferVision);
+        }
+        // Tránh trùng chính/phụ.
+        if ($primary && $fallback && (int) $primary['id'] === (int) $fallback['id']) {
+            $fallback = null;
+        }
+        return ['primary' => $primary, 'fallback' => $fallback];
+    }
+}
+
+if (!function_exists('llm_call_model')) {
+    /**
+     * Gọi 1 model đã phân giải (kèm provider). Route theo provider.api_type.
+     * @return array ['ok','text','model_used','error','latency_ms','image_url'?]
+     */
+    function llm_call_model(array $model, array $messages, array $opts = []): array
+    {
+        $provider = $model['provider'] ?? null;
+        if (!$provider) {
+            return ['ok' => false, 'text' => '', 'error' => 'Model không có provider hợp lệ.'];
+        }
+        $endpoint = rtrim((string) ($provider['endpoint'] ?? ''), '/');
+        $apiKey   = (string) ($provider['api_key'] ?? '');
+        $apiType  = (string) ($provider['api_type'] ?? 'openai');
+        $modelName = (string) ($model['model_name'] ?? '');
+        if ($endpoint === '' || $apiKey === '' || $modelName === '') {
+            return ['ok' => false, 'text' => '', 'error' => 'Thiếu endpoint, API key hoặc model_name.'];
+        }
+
+        $t0 = microtime(true);
+        if (($model['kind'] ?? 'chat') === 'image') {
+            $res = llm_openai_image($endpoint, $apiKey, $modelName, $messages, $opts);
+        } elseif ($apiType === 'anthropic') {
+            $res = llm_anthropic_chat($endpoint, $apiKey, $modelName, $messages, $opts);
+        } else {
+            $res = llm_chat_raw($endpoint, $apiKey, $modelName, $messages, $opts);
+        }
+        $res['latency_ms'] = (int) round((microtime(true) - $t0) * 1000);
+        return $res;
+    }
+}
+
+if (!function_exists('llm_call_feature')) {
+    /**
+     * Gọi model chính cho tính năng; nếu lỗi thì tự động gọi dự phòng.
+     * $opts được bổ sung temperature/max_tokens mặc định từ settings nếu thiếu.
+     */
+    function llm_call_feature(string $feature, array $messages, array $opts = []): array
+    {
+        $pdo = llm_pdo();
+        if (!$pdo) {
+            return ['ok' => false, 'text' => '', 'error' => 'Không có kết nối DB.'];
+        }
+        $opts['temperature'] = $opts['temperature'] ?? (float) get_setting('llm_temperature', '0.6');
+        $opts['max_tokens']  = $opts['max_tokens'] ?? (int) get_setting('llm_max_tokens', '1200');
+        if ($feature === 'image' && empty($opts['size'])) {
+            $opts['size'] = (string) get_setting('ai_image_size', '1024x1024');
+        }
+
+        $r = llm_resolve_feature($pdo, $feature);
+        $chain = array_values(array_filter([$r['primary'], $r['fallback']]));
+        if (empty($chain)) {
+            return ['ok' => false, 'text' => '', 'error' => 'Chưa gán model cho tính năng "' . $feature . '".'];
+        }
+        $last = ['ok' => false, 'text' => '', 'error' => 'Không gọi được LLM.'];
+        foreach ($chain as $m) {
+            $res = llm_call_model($m, $messages, $opts);
+            if (!empty($res['ok'])) {
+                return $res;
+            }
+            $last = $res;
+        }
+        return $last;
+    }
+}
+
 if (!function_exists('llm_chat')) {
+    /**
+     * Tương thích ngược. Mặc định dùng tính năng 'write' (viết bài) theo cấu hình mới.
+     * Nếu $opts['feature'] có -> dùng feature đó. Nếu $opts['model'] có (chuỗi) ->
+     * ép dùng cấu hình llm_* cũ để test override trực tiếp.
+     */
     function llm_chat(array $messages, array $opts = []): array
+    {
+        // Đường test override cũ: có model chuỗi + endpoint/key trong settings cũ.
+        if (!empty($opts['model']) && is_string($opts['model'])) {
+            $endpoint = (string) get_setting('llm_endpoint', '');
+            $api_key  = (string) get_setting('llm_api_key', '');
+            if ($endpoint !== '' && $api_key !== '') {
+                $opts['temperature'] = $opts['temperature'] ?? (float) get_setting('llm_temperature', '0.6');
+                $opts['max_tokens']  = $opts['max_tokens'] ?? (int) get_setting('llm_max_tokens', '1200');
+                return llm_chat_raw($endpoint, $api_key, (string) $opts['model'], $messages, $opts);
+            }
+        }
+
+        $feature = (string) ($opts['feature'] ?? 'write');
+        unset($opts['feature']);
+        $res = llm_call_feature($feature, $messages, $opts);
+        if (!empty($res['ok']) || !empty($res['error'])) {
+            // Nếu chưa cấu hình provider/model nào -> fallback về đường cũ để không vỡ hệ thống.
+            if (empty($res['ok']) && strpos((string) ($res['error'] ?? ''), 'Chưa gán model') !== false) {
+                return llm_chat_legacy($messages, $opts);
+            }
+            return $res;
+        }
+        return llm_chat_legacy($messages, $opts);
+    }
+}
+
+if (!function_exists('llm_chat_legacy')) {
+    /** Đường gọi cũ dựa trên settings llm_endpoint/llm_api_key/llm_model (dự phòng khi chưa có provider). */
+    function llm_chat_legacy(array $messages, array $opts = []): array
     {
         $endpoint = (string) get_setting('llm_endpoint', '');
         $api_key  = (string) get_setting('llm_api_key', '');
@@ -22,7 +237,7 @@ if (!function_exists('llm_chat')) {
         $fallback = (string) get_setting('llm_model_fallback', '');
 
         if ($endpoint === '' || $api_key === '') {
-            return ['ok' => false, 'text' => '', 'error' => 'Chưa cấu hình LLM endpoint hoặc API key.'];
+            return ['ok' => false, 'text' => '', 'error' => 'Chưa cấu hình LLM. Vào Cấu hình AI để thêm provider/model.'];
         }
 
         $opts['temperature'] = $opts['temperature'] ?? (float) get_setting('llm_temperature', '0.6');
@@ -91,6 +306,173 @@ if (!function_exists('llm_chat_raw')) {
                 'text'       => trim((string) $json['choices'][0]['message']['content']),
                 'model_used' => $model,
                 'usage'      => $json['usage'] ?? null,
+            ];
+        }
+        return ['ok' => false, 'text' => '', 'error' => 'HTTP ' . $http . ' — ' . substr((string) $resp, 0, 300)];
+    }
+}
+
+if (!function_exists('llm_anthropic_chat')) {
+    /**
+     * Gọi Anthropic Messages API: POST {endpoint}/messages.
+     * Tự tách 'system' khỏi messages; convert content (text + ảnh base64 block).
+     * Hỗ trợ response_format json_object bằng cách nhắc trong system (Anthropic không có tham số này).
+     */
+    function llm_anthropic_chat(string $endpoint, string $api_key, string $model, array $messages, array $opts = []): array
+    {
+        $endpoint = rtrim($endpoint, '/');
+        $url = $endpoint . '/messages';
+
+        $systemParts = [];
+        $conv = [];
+        foreach ($messages as $m) {
+            $role = (string) ($m['role'] ?? 'user');
+            $content = $m['content'] ?? '';
+            if ($role === 'system') {
+                $systemParts[] = is_string($content) ? $content : json_encode($content, JSON_UNESCAPED_UNICODE);
+                continue;
+            }
+            $conv[] = ['role' => ($role === 'assistant' ? 'assistant' : 'user'), 'content' => llm_anthropic_content($content)];
+        }
+        if (!empty($opts['response_format']['type']) && $opts['response_format']['type'] === 'json_object') {
+            $systemParts[] = 'CHỈ trả về JSON hợp lệ, không thêm giải thích, không dùng code fence.';
+        }
+
+        $body = [
+            'model'      => $model,
+            'max_tokens' => (int) ($opts['max_tokens'] ?? 1200),
+            'messages'   => $conv,
+        ];
+        if (!empty($systemParts)) {
+            $body['system'] = implode("\n", $systemParts);
+        }
+        if (isset($opts['temperature'])) {
+            $body['temperature'] = (float) $opts['temperature'];
+        }
+
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_POST => true,
+            CURLOPT_POSTFIELDS => json_encode($body, JSON_UNESCAPED_UNICODE),
+            CURLOPT_HTTPHEADER => [
+                'Content-Type: application/json',
+                'x-api-key: ' . $api_key,
+                'anthropic-version: 2023-06-01',
+            ],
+            CURLOPT_TIMEOUT => 60,
+        ]);
+        foreach ((function_exists('app_curl_ssl_opts') ? app_curl_ssl_opts() : [CURLOPT_SSL_VERIFYPEER => false]) as $optKey => $optVal) {
+            curl_setopt($ch, $optKey, $optVal);
+        }
+        $resp = curl_exec($ch);
+        $http = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $err  = curl_error($ch);
+        curl_close($ch);
+
+        if ($resp === false) {
+            return ['ok' => false, 'text' => '', 'error' => 'cURL error: ' . $err];
+        }
+        $json = json_decode($resp, true);
+        if ($http >= 200 && $http < 300 && is_array($json) && !empty($json['content'][0]['text'])) {
+            $text = '';
+            foreach ($json['content'] as $blk) {
+                if (($blk['type'] ?? '') === 'text') { $text .= $blk['text']; }
+            }
+            return [
+                'ok'         => true,
+                'text'       => trim($text),
+                'model_used' => $model,
+                'usage'      => $json['usage'] ?? null,
+            ];
+        }
+        return ['ok' => false, 'text' => '', 'error' => 'HTTP ' . $http . ' — ' . substr((string) $resp, 0, 300)];
+    }
+}
+
+if (!function_exists('llm_anthropic_content')) {
+    /** Convert content OpenAI-style -> Anthropic content blocks (text / image base64). */
+    function llm_anthropic_content($content): array
+    {
+        if (is_string($content)) {
+            return [['type' => 'text', 'text' => $content]];
+        }
+        if (!is_array($content)) {
+            return [['type' => 'text', 'text' => (string) $content]];
+        }
+        $blocks = [];
+        foreach ($content as $part) {
+            $type = $part['type'] ?? '';
+            if ($type === 'text') {
+                $blocks[] = ['type' => 'text', 'text' => (string) ($part['text'] ?? '')];
+            } elseif ($type === 'image_url') {
+                $u = is_array($part['image_url'] ?? null) ? (string) ($part['image_url']['url'] ?? '') : (string) ($part['image_url'] ?? '');
+                if (strncmp($u, 'data:', 5) === 0 && preg_match('#^data:([^;]+);base64,(.*)$#s', $u, $mm)) {
+                    $blocks[] = ['type' => 'image', 'source' => ['type' => 'base64', 'media_type' => $mm[1], 'data' => $mm[2]]];
+                } elseif ($u !== '') {
+                    $blocks[] = ['type' => 'image', 'source' => ['type' => 'url', 'url' => $u]];
+                }
+            }
+        }
+        return $blocks ?: [['type' => 'text', 'text' => '']];
+    }
+}
+
+if (!function_exists('llm_openai_image')) {
+    /**
+     * Tạo ảnh qua OpenAI-compatible: POST {endpoint}/images/generations.
+     * $messages: lấy prompt từ message user cuối (text). $opts['size'] = '1024x1024'.
+     * Nếu $opts['image_base64'] có -> dùng /images/edits (multipart).
+     * @return array ['ok','text'(prompt),'image_url','model_used','error']
+     */
+    function llm_openai_image(string $endpoint, string $api_key, string $model, array $messages, array $opts = []): array
+    {
+        $endpoint = rtrim($endpoint, '/');
+        $prompt = '';
+        foreach (array_reverse($messages) as $m) {
+            if (($m['role'] ?? '') !== 'system') {
+                $c = $m['content'] ?? '';
+                $prompt = is_string($c) ? $c : (string) ($c[0]['text'] ?? '');
+                if ($prompt !== '') break;
+            }
+        }
+        if ($prompt === '') {
+            return ['ok' => false, 'text' => '', 'error' => 'Thiếu prompt tạo ảnh.'];
+        }
+        $size = (string) ($opts['size'] ?? '1024x1024');
+
+        $ch = curl_init($endpoint . '/images/generations');
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_POST => true,
+            CURLOPT_POSTFIELDS => json_encode(['model' => $model, 'prompt' => $prompt, 'size' => $size, 'n' => 1], JSON_UNESCAPED_UNICODE),
+            CURLOPT_HTTPHEADER => [
+                'Content-Type: application/json',
+                'Authorization: Bearer ' . $api_key,
+            ],
+            CURLOPT_TIMEOUT => 120,
+        ]);
+        foreach ((function_exists('app_curl_ssl_opts') ? app_curl_ssl_opts() : [CURLOPT_SSL_VERIFYPEER => false]) as $optKey => $optVal) {
+            curl_setopt($ch, $optKey, $optVal);
+        }
+        $resp = curl_exec($ch);
+        $http = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $err  = curl_error($ch);
+        curl_close($ch);
+
+        if ($resp === false) {
+            return ['ok' => false, 'text' => '', 'error' => 'cURL error: ' . $err];
+        }
+        $json = json_decode($resp, true);
+        if ($http >= 200 && $http < 300 && is_array($json) && !empty($json['data'][0])) {
+            $d = $json['data'][0];
+            $imageUrl = !empty($d['url']) ? (string) $d['url']
+                : (!empty($d['b64_json']) ? 'data:image/png;base64,' . $d['b64_json'] : '');
+            return [
+                'ok'         => true,
+                'text'       => $prompt,
+                'image_url'  => $imageUrl,
+                'model_used' => $model,
             ];
         }
         return ['ok' => false, 'text' => '', 'error' => 'HTTP ' . $http . ' — ' . substr((string) $resp, 0, 300)];
@@ -351,7 +733,7 @@ if (!function_exists('ai_generate_seo')) {
         $res = llm_chat([
             ['role' => 'system', 'content' => $system_prompt],
             ['role' => 'user', 'content' => "Dữ liệu nguồn:\n$context\nHãy tạo ra kết quả SEO hoàn hảo nhất."],
-        ], ['temperature' => 0.1, 'max_tokens' => 800, 'response_format' => ['type' => 'json_object']]);
+        ], ['feature' => 'seo', 'temperature' => 0.1, 'max_tokens' => 800, 'response_format' => ['type' => 'json_object']]);
 
         if (empty($res['ok'])) {
             return ['ok' => false, 'error' => $res['error'] ?? 'api_error'];

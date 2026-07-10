@@ -1079,56 +1079,18 @@ require_once '../includes/header.php';
                     </div>
 
                     <!-- AI / LLM Tab -->
-                    <?php $llm_has_key = trim((string) ($settings['llm_api_key'] ?? '')) !== ''; ?>
                     <div class="tab-pane fade <?php echo $active_tab === 'ai' ? 'show active' : ''; ?>" id="ai" role="tabpanel">
                         <div class="alert alert-info d-flex align-items-start gap-2 mb-4">
                             <i class="bi bi-robot fs-5 mt-1"></i>
                             <div>
-                                <strong>Cấu hình LLM dùng chung.</strong> Một cấu hình này phục vụ cả <strong>Auto SEO</strong>, <strong>viết lại tiêu đề/nội dung sản phẩm</strong> và viết bài về sau.
-                                Hỗ trợ mọi nhà cung cấp tương thích chuẩn OpenAI: Groq, OpenAI, CLIProxy, Together AI...
+                                <strong>Cấu hình AI theo Provider / Model.</strong> Quản lý nhà cung cấp, model và gán model (chính + dự phòng) cho từng tính năng: <strong>Viết bài</strong>, <strong>SEO</strong>, <strong>Vision</strong>, <strong>Tạo ảnh</strong>. Hỗ trợ chuẩn OpenAI và Anthropic.
                             </div>
                         </div>
 
-                        <div class="row g-3">
-                            <div class="col-md-8">
-                                <label class="form-label fw-bold"><i class="bi bi-hdd-network me-1 text-primary"></i>Endpoint (Base URL)</label>
-                                <input type="text" class="form-control" name="settings[llm_endpoint]" value="<?php echo e($settings['llm_endpoint'] ?? ''); ?>" placeholder="https://cli.thangdgm.io.vn/v1">
-                                <div class="form-text">Base URL kết thúc bằng <code>/v1</code>. Hệ thống tự gọi <code>/chat/completions</code>. VD Groq: <code>https://api.groq.com/openai/v1</code>.</div>
-                            </div>
-                            <div class="col-md-4">
-                                <label class="form-label fw-bold d-flex justify-content-between">
-                                    <span><i class="bi bi-key me-1 text-primary"></i>API Key</span>
-                                    <?php if ($llm_has_key): ?><span class="badge bg-success-subtle text-success rounded-pill px-2"><i class="bi bi-check-circle-fill me-1"></i>Đã có</span><?php endif; ?>
-                                </label>
-                                <div class="input-group">
-                                    <input type="password" class="form-control" name="settings[llm_api_key]" id="llm_api_key_input" autocomplete="new-password" placeholder="<?php echo $llm_has_key ? '***********************' : 'Nhập API key...'; ?>">
-                                    <button class="btn btn-outline-secondary" type="button" id="toggleLlmKey" title="Hiện/ẩn"><i class="bi bi-eye"></i></button>
-                                </div>
-                                <div class="form-text"><?php echo $llm_has_key ? 'Để trống để giữ key hiện tại.' : 'Dán key để kích hoạt AI.'; ?></div>
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label fw-bold"><i class="bi bi-cpu me-1 text-primary"></i>Model chính</label>
-                                <input type="text" class="form-control" name="settings[llm_model]" value="<?php echo e($settings['llm_model'] ?? ''); ?>" placeholder="VD: llama-3.3-70b-versatile">
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label fw-bold"><i class="bi bi-cpu me-1 text-secondary"></i>Model dự phòng</label>
-                                <input type="text" class="form-control" name="settings[llm_model_fallback]" value="<?php echo e($settings['llm_model_fallback'] ?? ''); ?>" placeholder="Dùng khi model chính lỗi/quá tải">
-                            </div>
-                            <div class="col-md-4">
-                                <label class="form-label fw-bold">Temperature</label>
-                                <input type="number" step="0.1" min="0" max="2" class="form-control" name="settings[llm_temperature]" value="<?php echo e($settings['llm_temperature'] ?? '0.6'); ?>">
-                                <div class="form-text">0 = chính xác, cao = sáng tạo.</div>
-                            </div>
-                            <div class="col-md-4">
-                                <label class="form-label fw-bold">Max tokens</label>
-                                <input type="number" min="100" max="8000" class="form-control" name="settings[llm_max_tokens]" value="<?php echo e($settings['llm_max_tokens'] ?? '1200'); ?>">
-                            </div>
-                            <div class="col-md-4 d-flex align-items-end">
-                                <button type="button" id="btn_test_llm" class="btn btn-outline-primary w-100"><i class="bi bi-lightning-charge-fill me-1"></i>Test kết nối</button>
-                            </div>
-                            <div class="col-12">
-                                <div class="form-text" id="llm_test_result"><?php echo $llm_has_key ? '' : 'Lưu cấu hình trước khi test.'; ?></div>
-                            </div>
+                        <div class="d-grid d-md-flex gap-2 mb-4">
+                            <a href="<?php echo BASE_URL; ?>admin/ai/index.php" class="btn btn-primary rounded-pill px-4">
+                                <i class="bi bi-sliders me-2"></i>Mở trang cấu hình AI nâng cao
+                            </a>
                         </div>
 
                         <hr class="my-4">

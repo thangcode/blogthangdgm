@@ -1994,6 +1994,60 @@ function has_table_column($pdo, $table, $column)
 }
 
 /**
+ * Khóa mã hóa nội bộ dẫn xuất từ SECURITY_KEY (32 byte cho AES-256).
+ */
+function app_secret_key(): string
+{
+    $seed = defined('SECURITY_KEY') ? (string) SECURITY_KEY : 'blog-default-secret';
+    return hash('sha256', 'llm|' . $seed, true);
+}
+
+/**
+ * Mã hóa chuỗi bí mật (VD API key) bằng AES-256-GCM.
+ * Trả về chuỗi có tiền tố "enc:v1:" (base64 của iv|tag|cipher). Chuỗi rỗng -> trả rỗng.
+ */
+function app_encrypt(string $plain): string
+{
+    if ($plain === '') {
+        return '';
+    }
+    if (!function_exists('openssl_encrypt')) {
+        return $plain; // môi trường thiếu openssl -> giữ nguyên (an toàn ngược)
+    }
+    $key = app_secret_key();
+    $iv = random_bytes(12);
+    $tag = '';
+    $cipher = openssl_encrypt($plain, 'aes-256-gcm', $key, OPENSSL_RAW_DATA, $iv, $tag);
+    if ($cipher === false) {
+        return $plain;
+    }
+    return 'enc:v1:' . base64_encode($iv . $tag . $cipher);
+}
+
+/**
+ * Giải mã chuỗi do app_encrypt tạo. Chuỗi không có tiền tố "enc:v1:" -> trả nguyên
+ * (tương thích dữ liệu cũ chưa mã hóa).
+ */
+function app_decrypt(string $enc): string
+{
+    if ($enc === '' || strncmp($enc, 'enc:v1:', 7) !== 0) {
+        return $enc;
+    }
+    if (!function_exists('openssl_decrypt')) {
+        return '';
+    }
+    $raw = base64_decode(substr($enc, 7), true);
+    if ($raw === false || strlen($raw) < 28) {
+        return '';
+    }
+    $iv = substr($raw, 0, 12);
+    $tag = substr($raw, 12, 16);
+    $cipher = substr($raw, 28);
+    $plain = openssl_decrypt($cipher, 'aes-256-gcm', app_secret_key(), OPENSSL_RAW_DATA, $iv, $tag);
+    return $plain === false ? '' : $plain;
+}
+
+/**
  * Đảm bảo bảng product_views (log từng lượt xem THẬT kèm thời gian) tồn tại.
  * Cho phép thống kê lượt xem theo khoảng thời gian (giống product_clicks cho click).
  */

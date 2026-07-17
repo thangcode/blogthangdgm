@@ -336,4 +336,3 @@ $current_category_url = categoryUrl($category['slug'], true);
 </script>
 
 <?php require_once '../includes/footer.php'; ?>
-

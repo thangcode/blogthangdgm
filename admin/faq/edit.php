@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // admin/faq/edit.php
 session_start();
 require_once '../../config/database.php';

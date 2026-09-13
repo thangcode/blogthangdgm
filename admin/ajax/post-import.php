@@ -10,6 +10,6 @@ $ownerId=ai_endpoint_begin();
 $raw=trim((string)($_POST['ideas']??''));$lines=array_values(array_unique(array_filter(array_map('trim',preg_split('/\r\n|\r|\n/',$raw)),fn($v)=>$v!=='')));
 if(!$lines||count($lines)>100)ai_endpoint_error('invalid_input');
 $base=(string)($_POST['request_key']??'');
-$specs=[];foreach($lines as $i=>$line){$specs[]=['request_key'=>ai_endpoint_request_key($base,$i),'kind'=>'import','action'=>'all','entity_id'=>null,
-'payload'=>['save'=>true,'line'=>mb_substr($line,0,2000,'UTF-8'),'author_name'=>$author],'active_key'=>'import:'.$ownerId.':'.hash('sha256',$line)];}
+$specs=[];foreach($lines as $i=>$line){$line=trim(mb_substr($line,0,2000,'UTF-8'));$specs[]=['request_key'=>ai_endpoint_request_key($base,$i),'kind'=>'import','action'=>'all','entity_id'=>null,
+'payload'=>['save'=>true,'line'=>$line,'author_name'=>$author],'active_key'=>'import:'.$ownerId.':'.hash('sha256',$line)];}
 ai_endpoint_enqueue($specs,$ownerId);

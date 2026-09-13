@@ -540,9 +540,12 @@ function ai_runner_assert_owner_active(array &$job): void
 {
     if (!empty($job['owner_checked'])) return;
     $pdo = ai_jobs_pdo();
-    $stmt = $pdo->prepare("SELECT id FROM users WHERE id=? AND role='admin' LIMIT 1");
+    // is_active là cột bảo mật lazy-added; chỉ ép khi cột thật sự tồn tại.
+    $activeClause = (function_exists('has_table_column') && has_table_column($pdo, 'users', 'is_active'))
+        ? ' AND is_active=1' : '';
+    $stmt = $pdo->prepare("SELECT id FROM users WHERE id=? AND role='admin'" . $activeClause . " LIMIT 1");
     $stmt->execute([(int) ($job['owner_id'] ?? 0)]);
-    if (!$stmt->fetchColumn()) throw new AiJobException('cancelled', 'The job owner is no longer an administrator.');
+    if (!$stmt->fetchColumn()) throw new AiJobException('owner_inactive', 'The job owner is no longer allowed to run AI jobs.');
     $job['owner_checked'] = true;
 }
 

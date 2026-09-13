@@ -9,6 +9,7 @@ check(ai_jobs_json_decode('invalid', ['x'=>2])['x'] === 2, 'json fallback');
 check(ai_jobs_safe_message('timeout') !== ai_jobs_safe_message('unknown'), 'safe error map');
 check(ai_jobs_safe_message('content_filtered') !== ai_jobs_safe_message('unknown'), 'filtered error map');
 check(ai_jobs_safe_message('request_rejected') !== ai_jobs_safe_message('unknown'), 'rejected error map');
+check(ai_jobs_safe_message('owner_inactive') !== ai_jobs_safe_message('cancelled'), 'owner inactive is not cancel');
 check(ai_jobs_active_key('post','all',12,true) === 'post:12:write', 'active key');
 check(ai_jobs_active_key('post','all',12,false) === null, 'preview has no active key');
 $row=['id'=>'1','batch_id'=>str_repeat('a',32),'kind'=>'post','action'=>'all','entity_id'=>'12','status'=>'queued','stage'=>'prepare','attempts'=>'0','error_code'=>null,'message'=>null,'created_at'=>'now','updated_at'=>'now','finished_at'=>null,'result'=>null,'checkpoint'=>'{}'];

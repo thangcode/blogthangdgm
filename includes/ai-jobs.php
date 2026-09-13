@@ -109,7 +109,8 @@ function ai_jobs_safe_message(string $code): string
         'invalid_input' => 'Dữ liệu gửi lên không hợp lệ.',
         'not_found' => 'Không tìm thấy dữ liệu cần xử lý.',
         'conflict' => 'Dữ liệu đã thay đổi trong lúc chờ; hệ thống không ghi đè.',
-        'cancelled' => 'Tác vụ đã được hủy.',
+        'cancelled' => 'Tác vụ đã được hủy trước khi hoàn tất.',
+        'owner_inactive' => 'Tài khoản tạo tác vụ không còn quyền chạy AI.',
         'timeout' => 'Dịch vụ AI phản hồi quá chậm.',
         'rate_limited' => 'Dịch vụ AI đang bận; tác vụ sẽ thử lại.',
         'provider_unavailable' => 'Dịch vụ AI tạm thời không khả dụng.',
@@ -244,6 +245,7 @@ function ai_jobs_request_cancel(PDO $pdo, int $ownerId, int $id): bool
     $stmt = $pdo->prepare("UPDATE ai_jobs SET cancel_requested=1,
         finished_at=IF(status IN ('queued','retry_wait'),NOW(),finished_at),
         active_key=IF(status IN ('queued','retry_wait'),NULL,active_key),
+        error_code=IF(status IN ('queued','retry_wait'),'cancelled',error_code),
         message=IF(status IN ('queued','retry_wait'),?,message),
         status=IF(status IN ('queued','retry_wait'),'cancelled',status), updated_at=NOW()
         WHERE id=? AND owner_id=? AND status NOT IN ('succeeded','failed','cancelled')");
@@ -300,7 +302,7 @@ function ai_job_claim(PDO &$pdo, int $leaseSeconds = 360): ?array
         $row=$pdo->query("SELECT * FROM ai_jobs WHERE status IN ('queued','retry_wait') AND cancel_requested=0 AND available_at<=NOW() ORDER BY id LIMIT 1 FOR UPDATE")->fetch();
         if (!$row) { $pdo->commit(); return null; }
         $token=bin2hex(random_bytes(16));
-        $stmt=$pdo->prepare("UPDATE ai_jobs SET status='running',claim_token=?,lease_until=DATE_ADD(NOW(),INTERVAL ? SECOND),updated_at=NOW() WHERE id=?");
+        $stmt=$pdo->prepare("UPDATE ai_jobs SET status='running',claim_token=?,lease_until=DATE_ADD(NOW(),INTERVAL ? SECOND),error_code=NULL,message=NULL,updated_at=NOW() WHERE id=?");
         $stmt->execute([$token,$leaseSeconds,$row['id']]); $pdo->commit();
         $row['claim_token']=$token; $row['status']='running'; $row['lease_seconds']=$leaseSeconds; return ai_job_decode($row);
     } catch(Throwable $e){ if($pdo->inTransaction())$pdo->rollBack(); throw $e; }
@@ -422,4 +424,23 @@ function ai_job_mark_cancelled(array &$job): void
 {
     $pdo=ai_jobs_pdo(); $stmt=$pdo->prepare("UPDATE ai_jobs SET status='cancelled',active_key=NULL,claim_token=NULL,lease_until=NULL,error_code='cancelled',message=?,finished_at=NOW(),updated_at=NOW() WHERE id=? AND claim_token=?");
     $stmt->execute([ai_jobs_safe_message('cancelled'),$job['id'],$job['claim_token']]); $job['status']='cancelled';
+}
+
+/**
+ * Dọn job đã kết thúc quá hạn giữ (mặc định 30 ngày, cấu hình qua setting
+ * ai_jobs_retention_days, kẹp [7,365]). Chỉ xóa trạng thái terminal có finished_at.
+ * Mọi lỗi đều nuot — prune không bao giờ làm hỏng luồng chính.
+ */
+function ai_jobs_prune_finished(PDO $pdo, int $days = 0): int
+{
+    if ($days <= 0) {
+        $days = function_exists('get_setting') ? (int) get_setting('ai_jobs_retention_days', '30') : 30;
+    }
+    $days = max(7, min(365, $days));
+    try {
+        $stmt = $pdo->query("DELETE FROM ai_jobs WHERE status IN ('succeeded','failed','cancelled') AND finished_at IS NOT NULL AND finished_at < DATE_SUB(NOW(), INTERVAL " . $days . " DAY)");
+        return $stmt !== false ? $stmt->rowCount() : 0;
+    } catch (Throwable $e) {
+        return 0;
+    }
 }

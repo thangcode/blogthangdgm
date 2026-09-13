@@ -26,6 +26,7 @@ try {
     if (!is_dir($lockDir) && !@mkdir($lockDir, 0750, true) && !is_dir($lockDir)) throw new RuntimeException('lock_dir');
     $lock = @fopen($lockDir . DIRECTORY_SEPARATOR . 'ai-worker.lock', 'c');
     if (!$lock || !flock($lock, LOCK_EX | LOCK_NB)) { echo "Another AI worker is active.\n"; exit(0); }
+    ai_jobs_prune_finished($pdo);
 
     $started = microtime(true); $processed = 0;
     $jobDeadline = $started + $maxSeconds - 3;
@@ -56,7 +57,8 @@ try {
             if (($job['status'] ?? '') === 'running') ai_job_yield($job);
             if ($stopWorker) break;
         } catch (AiJobException $e) {
-            ai_job_mark_error($job, $e->errorCode, $e->retryable);
+            if ($e->errorCode === 'cancelled') ai_job_mark_cancelled($job);
+            else ai_job_mark_error($job, $e->errorCode, $e->retryable);
         } catch (Throwable $e) {
             if ($e->getMessage() === 'cancelled') ai_job_mark_cancelled($job);
             elseif ($e->getMessage() !== 'claim_lost') ai_job_mark_error($job, 'worker_error', false);

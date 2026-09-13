@@ -134,10 +134,9 @@ window.addEventListener('load', function(){
         const old = btn.innerHTML;
         btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>' + (withSeo ? 'AI đang viết + SEO...' : 'AI đang viết...');
         const body = new URLSearchParams({ action: withSeo ? 'all' : 'rewrite', id: btn.dataset.id, save: '1', csrf_token: FORM_CSRF });
-        fetch('../ajax/page-ai.php', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: body.toString() })
-            .then(r => r.json())
+        AIJobs.run('../ajax/page-ai.php', body, { onProgress: p => { btn.textContent = AIJobs.progressText(p); } })
             .then(d => {
-                if (d.success && d.content) {
+                if (d.content) {
                     if (window.tinymce && tinymce.get('content')) tinymce.get('content').setContent(d.content);
                     else document.getElementById('content').value = d.content;
                     const sumEl = document.querySelector('textarea[name="summary"]');
@@ -151,10 +150,10 @@ window.addEventListener('load', function(){
                             if (d.focus_keyword) setTagInputValues('focusKeywordHidden', [d.focus_keyword]);
                             if (d.meta_keywords) setTagInputValues('metaKeywordsHidden', String(d.meta_keywords).split(',').map(s => s.trim()).filter(Boolean));
                         }
-                        alert('Đã viết trang + SEO và LƯU. Bạn có thể chỉnh thêm rồi bấm "Lưu trang".');
-                    } else {
-                        alert('Đã viết nội dung mới và LƯU. Bạn có thể chỉnh thêm rồi bấm "Lưu trang".');
                     }
+                    alert(d.success
+                        ? (withSeo ? 'Đã viết trang + SEO và LƯU. Bạn có thể chỉnh thêm rồi bấm "Lưu trang".' : 'Đã viết nội dung mới và LƯU. Bạn có thể chỉnh thêm rồi bấm "Lưu trang".')
+                        : (d.message || 'Nội dung đã được lưu một phần; bước tiếp theo gặp lỗi. Hãy tải lại trang trước khi chỉnh sửa thêm.'));
                 } else {
                     alert(d.message || 'Không thể gọi AI.');
                 }

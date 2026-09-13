@@ -388,6 +388,12 @@ function blog_sync_post_categories(PDO $pdo, int $postId, array $catIds): ?int
 function blog_sync_post_tags(PDO $pdo, int $postId, string $tagsCsv): void
 {
     $names = array_filter(array_map('trim', explode(',', $tagsCsv)), fn($v) => $v !== '');
+    if ($pdo->inTransaction()) {
+        $lock = $pdo->prepare('SELECT id FROM posts WHERE id=? LIMIT 1 FOR UPDATE');
+        $lock->execute([$postId]);
+        if (!$lock->fetchColumn()) return;
+        $pdo->prepare('SELECT tag_id FROM post_tags WHERE post_id=? FOR UPDATE')->execute([$postId]);
+    }
     $pdo->prepare("DELETE FROM post_tags WHERE post_id = ?")->execute([$postId]);
     if (empty($names)) return;
     $ins = $pdo->prepare("INSERT IGNORE INTO post_tags (post_id, tag_id) VALUES (?, ?)");
@@ -612,21 +618,68 @@ if (!function_exists('blog_import_remote_image')) {
     /**
      * Tải 1 ảnh từ URL về thư viện media, trả về đường dẫn tương đối (hoặc null nếu lỗi).
      */
-    function blog_import_remote_image(PDO $pdo, string $url, string $altName = ''): ?string
+    function blog_import_remote_image(PDO $pdo, string $url, string $altName = '', array $opts = []): ?string
     {
         $url = trim($url);
-        if ($url === '' || stripos($url, 'http') !== 0) return null;
-        $data = null;
-        if (function_exists('curl_init')) {
-            $ch = curl_init($url);
-            curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_FOLLOWLOCATION => true, CURLOPT_TIMEOUT => 15, CURLOPT_SSL_VERIFYPEER => false]);
-            $data = curl_exec($ch);
-            $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
-            curl_close($ch);
-            if ($code < 200 || $code >= 300) $data = null;
+        if ($url === '' || !in_array(strtolower((string) parse_url($url, PHP_URL_SCHEME)), ['http', 'https'], true)) return null;
+        if (!function_exists('curl_init')) return null;
+        $timeout = max(1.0, min(30.0, (float) ($opts['timeout'] ?? 15.0)));
+        $deadline = is_numeric($opts['deadline'] ?? null) ? (float) $opts['deadline'] : microtime(true) + $timeout;
+        $remaining = min($timeout, $deadline - microtime(true));
+        if ($remaining <= 0.1) return null;
+        $connectTimeout = max(0.1, min($remaining, (float) ($opts['connect_timeout'] ?? 5.0)));
+
+        $maxBytes = 8 * 1024 * 1024;
+        $data = '';
+        $tooLarge = false;
+        $ch = curl_init($url);
+        if ($ch === false) return null;
+        $ssl = function_exists('app_curl_ssl_opts')
+            ? app_curl_ssl_opts()
+            : [CURLOPT_SSL_VERIFYPEER => true, CURLOPT_SSL_VERIFYHOST => 2];
+        if (($ssl[CURLOPT_SSL_VERIFYPEER] ?? true) === false) {
+            $host = strtolower((string) ($_SERVER['HTTP_HOST'] ?? ''));
+            $host = preg_replace('/:\d+$/', '', $host);
+            $cwd = str_replace('\\', '/', (string) getcwd());
+            $isLocal = PHP_SAPI === 'cli' && stripos(PHP_OS, 'WIN') === 0
+                && preg_match('~/(?:xamp|xampp)/htdocs(?:/|$)~i', $cwd) === 1;
+            $isLocal = $isLocal || $host === 'localhost' || $host === '127.0.0.1' || $host === '::1'
+                || substr($host, -5) === '.test' || substr($host, -6) === '.local';
+            if (!$isLocal) {
+                $ssl[CURLOPT_SSL_VERIFYPEER] = true;
+                $ssl[CURLOPT_SSL_VERIFYHOST] = 2;
+                unset($ssl[CURLOPT_CAINFO]);
+            }
         }
-        if ($data === null) $data = @file_get_contents($url);
-        if (!$data) return null;
+        curl_setopt_array($ch, $ssl);
+        $curlOpts = [
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_MAXREDIRS => 3,
+            CURLOPT_TIMEOUT_MS => max(1, (int) floor($remaining * 1000)),
+            CURLOPT_CONNECTTIMEOUT_MS => max(1, (int) floor($connectTimeout * 1000)),
+            CURLOPT_NOSIGNAL => true,
+            CURLOPT_WRITEFUNCTION => static function ($handle, string $chunk) use (&$data, &$tooLarge, $maxBytes): int {
+                if (strlen($data) + strlen($chunk) > $maxBytes) {
+                    $tooLarge = true;
+                    return 0;
+                }
+                $data .= $chunk;
+                return strlen($chunk);
+            },
+        ];
+        if (defined('CURLOPT_PROTOCOLS')) {
+            $curlOpts[CURLOPT_PROTOCOLS] = CURLPROTO_HTTP | CURLPROTO_HTTPS;
+        }
+        if (defined('CURLOPT_REDIR_PROTOCOLS')) {
+            $curlOpts[CURLOPT_REDIR_PROTOCOLS] = CURLPROTO_HTTP | CURLPROTO_HTTPS;
+        }
+        curl_setopt_array($ch, $curlOpts);
+        $ok = curl_exec($ch);
+        $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $contentType = strtolower(trim((string) curl_getinfo($ch, CURLINFO_CONTENT_TYPE)));
+        curl_close($ch);
+        if ($ok === false || $tooLarge || $code < 200 || $code >= 300 || $data === '') return null;
+        if ($contentType !== '' && strpos($contentType, 'image/') !== 0 && $contentType !== 'application/octet-stream') return null;
         $info = @getimagesizefromstring($data);
         if ($info === false || empty($info[0])) return null;
         $mime = $info['mime'] ?? 'image/jpeg';
@@ -651,11 +704,18 @@ if (!function_exists('blog_import_youtube_thumb')) {
     /**
      * Tải ảnh đại diện từ thumbnail YouTube (ưu tiên maxres, fallback hq). Trả về path tương đối hoặc null.
      */
-    function blog_import_youtube_thumb(PDO $pdo, string $videoId, string $altName = ''): ?string
+    function blog_import_youtube_thumb(PDO $pdo, string $videoId, string $altName = '', array $opts = []): ?string
     {
-        if ($videoId === '') return null;
+        if (!preg_match('/\A[A-Za-z0-9_-]{11}\z/', $videoId)) return null;
+        $timeout = max(1.0, min(45.0, (float) ($opts['timeout'] ?? 20.0)));
+        $deadline = is_numeric($opts['deadline'] ?? null) ? (float) $opts['deadline'] : microtime(true) + $timeout;
         foreach (['maxresdefault', 'sddefault', 'hqdefault'] as $q) {
-            $rel = blog_import_remote_image($pdo, "https://i.ytimg.com/vi/{$videoId}/{$q}.jpg", $altName);
+            $remaining = $deadline - microtime(true);
+            if ($remaining <= 0.1) break;
+            $rel = blog_import_remote_image($pdo, "https://i.ytimg.com/vi/{$videoId}/{$q}.jpg", $altName, array_merge($opts, [
+                'deadline' => $deadline,
+                'timeout' => $remaining,
+            ]));
             if ($rel) return $rel;
         }
         return null;

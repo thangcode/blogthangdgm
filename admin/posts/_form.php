@@ -197,10 +197,9 @@ $cur_status = $_POST['status'] ?? ($post['status'] ?? 1);
         const old = btn.innerHTML;
         btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>' + (withSeo ? 'AI đang viết bài + SEO...' : 'AI đang viết...');
         const body = new URLSearchParams({ action: withSeo ? 'all' : 'rewrite', id: btn.dataset.id, save: '1', csrf_token: FORM_CSRF });
-        fetch('../ajax/post-ai.php', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: body.toString() })
-            .then(r => r.json())
+        AIJobs.run('../ajax/post-ai.php', body, { onProgress: p => { btn.textContent = AIJobs.progressText(p); } })
             .then(d => {
-                if (d.success && d.content) {
+                if (d.content) {
                     if (window.tinymce && tinymce.get('content')) tinymce.get('content').setContent(d.content);
                     else document.getElementById('content').value = d.content;
                     const sumEl = document.querySelector('textarea[name="summary"]');
@@ -230,10 +229,10 @@ $cur_status = $_POST['status'] ?? ($post['status'] ?? 1);
                             const th = document.querySelector('[data-tag-input] input[name="tags"]');
                             if (th) th.dispatchEvent(new CustomEvent('tags:set', { detail: { values: String(d.tags).split(',').map(s => s.trim()).filter(Boolean) } }));
                         }
-                        alert('Đã viết bài + SEO + tags và LƯU. Bạn có thể chỉnh thêm rồi bấm "Lưu bài viết".');
-                    } else {
-                        alert('Đã viết nội dung mới và LƯU. Bạn có thể chỉnh thêm rồi bấm "Lưu bài viết".');
                     }
+                    alert(d.success
+                        ? (withSeo ? 'Đã viết bài + SEO + tags và LƯU. Bạn có thể chỉnh thêm rồi bấm "Lưu bài viết".' : 'Đã viết nội dung mới và LƯU. Bạn có thể chỉnh thêm rồi bấm "Lưu bài viết".')
+                        : (d.message || 'Nội dung đã được lưu một phần; bước tiếp theo gặp lỗi. Hãy tải lại trang trước khi chỉnh sửa thêm.'));
                 } else {
                     alert(d.message || 'Không thể viết lại nội dung.');
                 }

@@ -21,13 +21,184 @@
  * Các hàm cũ (llm_chat/llm_chat_raw) vẫn giữ để tương thích ngược.
  * ========================================================================== */
 
+if (!function_exists('llm_request_options')) {
+    /** Options use seconds; deadline is an absolute microtime(true) timestamp shared by all attempts. */
+    function llm_request_options(array $opts = [], string $feature = 'write'): array
+    {
+        $budget = ['write' => 150.0, 'seo' => 60.0, 'test' => 15.0, 'vision' => 60.0, 'image' => 150.0][$feature] ?? 150.0;
+        $number = static function ($value, float $default): float {
+            return is_numeric($value) && is_finite((float) $value) ? (float) $value : $default;
+        };
+        $opts['timeout'] = max(0.001, min(600.0, $number($opts['timeout'] ?? $budget, $budget)));
+        $opts['connect_timeout'] = max(0.001, min(30.0, $number($opts['connect_timeout'] ?? 10.0, 10.0)));
+        $opts['deadline'] = $number($opts['deadline'] ?? null, microtime(true) + $opts['timeout']);
+        return $opts;
+    }
+}
+
+if (!function_exists('llm_error')) {
+    /** Public errors contain only stable codes and fixed messages, never raw provider responses. */
+    function llm_error(string $code, bool $retryable = false, string $model = ''): array
+    {
+        $messages = [
+            'timeout' => 'Yêu cầu AI đã hết thời gian chờ.',
+            'transport_error' => 'Không thể kết nối dịch vụ AI.',
+            'transport_unavailable' => 'Máy chủ chưa hỗ trợ kết nối AI.',
+            'invalid_request' => 'Yêu cầu AI không hợp lệ.',
+            'not_configured' => 'Chưa cấu hình tính năng AI.',
+            'db_unavailable' => 'Không thể kết nối cơ sở dữ liệu.',
+            'authentication_failed' => 'Xác thực dịch vụ AI thất bại.',
+            'rate_limited' => 'Dịch vụ AI đang bận. Vui lòng thử lại sau.',
+            'provider_unavailable' => 'Dịch vụ AI tạm thời không khả dụng.',
+            'request_rejected' => 'Dịch vụ AI đã từ chối yêu cầu.',
+            'truncated_output' => 'Nội dung AI bị cắt ngắn nên chưa được lưu. Vui lòng tăng giới hạn đầu ra hoặc thử lại.',
+            'invalid_output' => 'Nội dung AI trả về không đầy đủ hoặc không hợp lệ.',
+            'content_filtered' => 'Dịch vụ AI không thể hoàn tất nội dung này.',
+        ];
+        if (!isset($messages[$code])) {
+            $code = 'request_rejected';
+        }
+        $result = ['ok' => false, 'text' => '', 'error' => $messages[$code], 'code' => $code, 'retryable' => $retryable];
+        if ($model !== '') {
+            $result['model_used'] = $model;
+        }
+        return $result;
+    }
+}
+
+if (!function_exists('llm_is_local_host')) {
+    /** Chỉ cho phép fallback TLS local trên các hostname phát triển rõ ràng. */
+    function llm_is_local_host(): bool
+    {
+        if (PHP_SAPI === 'cli') {
+            $cwd = str_replace('\\', '/', (string) getcwd());
+            return stripos(PHP_OS, 'WIN') === 0 && preg_match('~/(?:xamp|xampp)/htdocs(?:/|$)~i', $cwd) === 1;
+        }
+        $host = strtolower(trim((string) ($_SERVER['HTTP_HOST'] ?? '')));
+        $host = preg_replace('/:\d+$/', '', $host);
+        return $host === 'localhost' || $host === '127.0.0.1' || $host === '::1'
+            || substr($host, -5) === '.test' || substr($host, -6) === '.local';
+    }
+}
+
+if (!function_exists('llm_curl_ssl_options')) {
+    /** Reuse the application CA policy, but never disable TLS verification outside local development. */
+    function llm_curl_ssl_options(): array
+    {
+        $ssl = function_exists('app_curl_ssl_opts')
+            ? app_curl_ssl_opts()
+            : [CURLOPT_SSL_VERIFYPEER => true, CURLOPT_SSL_VERIFYHOST => 2];
+        if (($ssl[CURLOPT_SSL_VERIFYPEER] ?? true) === false && !llm_is_local_host()) {
+            $ssl[CURLOPT_SSL_VERIFYPEER] = true;
+            $ssl[CURLOPT_SSL_VERIFYHOST] = 2;
+            unset($ssl[CURLOPT_CAINFO]);
+        }
+        return $ssl;
+    }
+}
+
+if (!function_exists('llm_http_json')) {
+    /** One bounded JSON transport shared by all provider adapters; no automatic transport retry. */
+    function llm_http_json(string $url, array $headers, array $body, array $opts = []): array
+    {
+        $opts = llm_request_options($opts);
+        $remaining = min((float) $opts['timeout'], (float) $opts['deadline'] - microtime(true));
+        if ($remaining <= 0) {
+            return llm_error('timeout', true);
+        }
+        if (!function_exists('curl_init')) {
+            return llm_error('transport_unavailable');
+        }
+        if (!in_array(strtolower((string) parse_url($url, PHP_URL_SCHEME)), ['http', 'https'], true)) {
+            return llm_error('invalid_request');
+        }
+        $encoded = json_encode($body, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        if ($encoded === false) {
+            return llm_error('invalid_request');
+        }
+        $ch = curl_init($url);
+        if ($ch === false) {
+            return llm_error('transport_error', true);
+        }
+        $response = '';
+        $tooLarge = false;
+        $errno = 0;
+        $http = 0;
+        try {
+            curl_setopt_array($ch, llm_curl_ssl_options());
+            $curlOpts = [
+                CURLOPT_POST => true,
+                CURLOPT_POSTFIELDS => $encoded,
+                CURLOPT_HTTPHEADER => $headers,
+                CURLOPT_FOLLOWLOCATION => false,
+                CURLOPT_TIMEOUT_MS => max(1, (int) floor($remaining * 1000)),
+                CURLOPT_CONNECTTIMEOUT_MS => max(1, (int) floor(min($remaining, (float) $opts['connect_timeout']) * 1000)),
+                CURLOPT_NOSIGNAL => true,
+                CURLOPT_WRITEFUNCTION => static function ($handle, string $chunk) use (&$response, &$tooLarge, $opts): int {
+                    if (microtime(true) >= (float) $opts['deadline']) {
+                        return 0;
+                    }
+                    if (strlen($response) + strlen($chunk) > 24 * 1024 * 1024) {
+                        $tooLarge = true;
+                        return 0;
+                    }
+                    $response .= $chunk;
+                    return strlen($chunk);
+                },
+            ];
+            if (defined('CURLOPT_PROTOCOLS')) {
+                $curlOpts[CURLOPT_PROTOCOLS] = CURLPROTO_HTTP | CURLPROTO_HTTPS;
+            }
+            curl_setopt_array($ch, $curlOpts);
+            $ok = curl_exec($ch);
+            $http = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $errno = curl_errno($ch);
+        } catch (Throwable $e) {
+            return llm_error('transport_error', true);
+        } finally {
+            curl_close($ch);
+        }
+        if ($errno === CURLE_OPERATION_TIMEDOUT || microtime(true) >= (float) $opts['deadline']) {
+            return llm_error('timeout', true);
+        }
+        if ($tooLarge) {
+            return llm_error('invalid_output');
+        }
+        if ($ok === false) {
+            return llm_error('transport_error', in_array($errno, [5, 6, 7, 18, 52, 55, 56], true));
+        }
+        if (in_array($http, [401, 403], true)) {
+            return llm_error('authentication_failed');
+        }
+        if ($http === 429) {
+            return llm_error('rate_limited', true);
+        }
+        if (in_array($http, [408, 504], true)) {
+            return llm_error('timeout', true);
+        }
+        if ($http >= 500) {
+            return llm_error('provider_unavailable', true);
+        }
+        if ($http < 200 || $http >= 300) {
+            return llm_error('request_rejected');
+        }
+        $json = json_decode($response, true);
+        return is_array($json) ? ['ok' => true, 'json' => $json] : llm_error('invalid_output');
+    }
+}
+
 if (!function_exists('llm_pdo')) {
     /** Lấy PDO dùng chung; tự kết nối lại nếu chưa có. */
     function llm_pdo(): ?PDO
     {
         global $pdo;
         if ($pdo instanceof PDO) {
-            return $pdo;
+            try {
+                if (function_exists('db_ensure_alive')) db_ensure_alive($pdo);
+                return $pdo;
+            } catch (Throwable $e) {
+                return null;
+            }
         }
         if (function_exists('db_connect')) {
             try { $pdo = db_connect(); return $pdo; } catch (Throwable $e) { return null; }
@@ -73,21 +244,29 @@ if (!function_exists('llm_pick_enabled_model')) {
      * Chọn 1 model đang bật cùng loại làm dự phòng an toàn khi model gán bị thiếu/tắt.
      * $kind: 'chat'|'image'; $preferVision: ưu tiên can_vision=1 (cho tính năng vision).
      */
-    function llm_pick_enabled_model(PDO $pdo, string $kind, bool $preferVision = false): ?array
+    function llm_pick_enabled_model(PDO $pdo, string $kind, bool $preferVision = false, array $excludeIds = []): ?array
     {
         try {
             $sql = "SELECT m.* FROM ai_models m
                     JOIN ai_providers p ON p.id = m.provider_id
                     WHERE m.status = 1 AND p.status = 1 AND m.kind = ?
-                    ORDER BY " . ($preferVision ? "m.can_vision DESC, " : "") . "m.sort_order ASC, m.id ASC
-                    LIMIT 1";
+                    ORDER BY " . ($preferVision ? "m.can_vision DESC, " : "") . "m.sort_order ASC, m.id ASC";
             $st = $pdo->prepare($sql);
             $st->execute([$kind]);
-            $row = $st->fetch();
+            while ($row = $st->fetch()) {
+                if (in_array((int) $row['id'], array_map('intval', $excludeIds), true)) continue;
+                $row['provider'] = llm_get_provider($pdo, (int) $row['provider_id']);
+                $provider = $row['provider'] ?? [];
+                $apiType = (string) ($provider['api_type'] ?? 'openai');
+                if ($preferVision && empty($row['can_vision'])) continue;
+                if ($kind === 'image' && $apiType !== 'openai') continue;
+                if (trim((string) ($row['model_name'] ?? '')) === ''
+                    || trim((string) ($provider['endpoint'] ?? '')) === ''
+                    || trim((string) ($provider['api_key'] ?? '')) === '') continue;
+                return $row;
+            }
         } catch (Throwable $e) { return null; }
-        if (!$row) return null;
-        $row['provider'] = llm_get_provider($pdo, (int) $row['provider_id']);
-        return $row;
+        return null;
     }
 }
 
@@ -106,9 +285,15 @@ if (!function_exists('llm_resolve_feature')) {
         $primaryId  = (int) get_setting('ai_' . $feature . '_primary', '0');
         $fallbackId = (int) get_setting('ai_' . $feature . '_fallback', '0');
 
-        $isUsable = function (?array $m): bool {
-            return $m && (int) ($m['status'] ?? 0) === 1
-                && !empty($m['provider']) && (int) ($m['provider']['status'] ?? 0) === 1;
+        $isUsable = function (?array $m) use ($kind, $preferVision): bool {
+            return $m && ($m['kind'] ?? 'chat') === $kind
+                && (!$preferVision || !empty($m['can_vision']))
+                && ($kind !== 'image' || (string) ($m['provider']['api_type'] ?? 'openai') === 'openai')
+                && (int) ($m['status'] ?? 0) === 1
+                && !empty($m['provider']) && (int) ($m['provider']['status'] ?? 0) === 1
+                && trim((string) ($m['model_name'] ?? '')) !== ''
+                && trim((string) ($m['provider']['endpoint'] ?? '')) !== ''
+                && trim((string) ($m['provider']['api_key'] ?? '')) !== '';
         };
 
         $primary  = llm_get_model($pdo, $primaryId);
@@ -116,15 +301,43 @@ if (!function_exists('llm_resolve_feature')) {
         if (!$isUsable($primary))  { $primary  = null; }
         if (!$isUsable($fallback)) { $fallback = null; }
 
-        // Nếu thiếu model chính -> dùng model bật cùng loại (tránh chết tính năng).
-        if (!$primary) {
-            $primary = llm_pick_enabled_model($pdo, $kind, $preferVision);
-        }
-        // Tránh trùng chính/phụ.
-        if ($primary && $fallback && (int) $primary['id'] === (int) $fallback['id']) {
+        // Nếu thiếu model chính, ưu tiên model dự phòng được cấu hình trước khi tự chọn.
+        if (!$primary && $fallback) {
+            $primary = $fallback;
             $fallback = null;
         }
+        if (!$primary) {
+            $primary = llm_pick_enabled_model($pdo, $kind, $preferVision);
+            if (!$isUsable($primary)) $primary = null;
+        }
+        if ($primary && $fallback && (int) $primary['id'] === (int) $fallback['id']) $fallback = null;
+        if (!$fallback && $primary) {
+            $fallback = llm_pick_enabled_model($pdo, $kind, $preferVision, [(int) $primary['id']]);
+            if (!$isUsable($fallback)) $fallback = null;
+        }
         return ['primary' => $primary, 'fallback' => $fallback];
+    }
+}
+
+if (!function_exists('llm_feature_available')) {
+    /** Availability returns a boolean only; provider credentials never leave the backend. */
+    function llm_feature_available(string $feature = 'write'): bool
+    {
+        if (!in_array($feature, ['write', 'seo', 'vision', 'image', 'test'], true)) {
+            return false;
+        }
+        try {
+            $pdo = llm_pdo();
+            if ($pdo && !empty(llm_resolve_feature($pdo, $feature)['primary'])) {
+                return true;
+            }
+            return $feature !== 'image' && function_exists('get_setting')
+                && trim((string) get_setting('llm_endpoint', '')) !== ''
+                && trim((string) get_setting('llm_api_key', '')) !== ''
+                && trim((string) get_setting('llm_model', 'gpt-4o-mini')) !== '';
+        } catch (Throwable $e) {
+            return false;
+        }
     }
 }
 
@@ -137,14 +350,14 @@ if (!function_exists('llm_call_model')) {
     {
         $provider = $model['provider'] ?? null;
         if (!$provider) {
-            return ['ok' => false, 'text' => '', 'error' => 'Model không có provider hợp lệ.'];
+            return llm_error('not_configured');
         }
         $endpoint = rtrim((string) ($provider['endpoint'] ?? ''), '/');
         $apiKey   = (string) ($provider['api_key'] ?? '');
         $apiType  = (string) ($provider['api_type'] ?? 'openai');
         $modelName = (string) ($model['model_name'] ?? '');
         if ($endpoint === '' || $apiKey === '' || $modelName === '') {
-            return ['ok' => false, 'text' => '', 'error' => 'Thiếu endpoint, API key hoặc model_name.'];
+            return llm_error('not_configured');
         }
 
         $t0 = microtime(true);
@@ -167,9 +380,17 @@ if (!function_exists('llm_call_feature')) {
      */
     function llm_call_feature(string $feature, array $messages, array $opts = []): array
     {
-        $pdo = llm_pdo();
+        $opts = llm_request_options($opts, $feature);
+        if ((float) $opts['deadline'] <= microtime(true)) {
+            return llm_error('timeout', true);
+        }
+        try {
+            $pdo = llm_pdo();
+        } catch (Throwable $e) {
+            return llm_error('db_unavailable', true);
+        }
         if (!$pdo) {
-            return ['ok' => false, 'text' => '', 'error' => 'Không có kết nối DB.'];
+            return llm_error('db_unavailable', true);
         }
         $opts['temperature'] = $opts['temperature'] ?? (float) get_setting('llm_temperature', '0.6');
         $opts['max_tokens']  = $opts['max_tokens'] ?? (int) get_setting('llm_max_tokens', '1200');
@@ -180,15 +401,30 @@ if (!function_exists('llm_call_feature')) {
         $r = llm_resolve_feature($pdo, $feature);
         $chain = array_values(array_filter([$r['primary'], $r['fallback']]));
         if (empty($chain)) {
-            return ['ok' => false, 'text' => '', 'error' => 'Chưa gán model cho tính năng "' . $feature . '".'];
+            return llm_error('not_configured');
         }
         $last = ['ok' => false, 'text' => '', 'error' => 'Không gọi được LLM.'];
         foreach ($chain as $m) {
             $res = llm_call_model($m, $messages, $opts);
+            if (!empty($res['ok']) && !empty($opts['parse']) && is_callable($opts['parse'])) {
+                try {
+                    $parsed = ($opts['parse'])((string) ($res['text'] ?? ''), $res);
+                } catch (Throwable $e) {
+                    $parsed = null;
+                }
+                if ($parsed === null || $parsed === false) {
+                    $res = llm_error('invalid_output', false, (string) ($res['model_used'] ?? ''));
+                } else {
+                    $res['parsed'] = $parsed;
+                }
+            }
             if (!empty($res['ok'])) {
                 return $res;
             }
             $last = $res;
+            if (!empty($opts['single_attempt']) || microtime(true) >= (float) $opts['deadline']) {
+                break;
+            }
         }
         return $last;
     }
@@ -202,6 +438,11 @@ if (!function_exists('llm_chat')) {
      */
     function llm_chat(array $messages, array $opts = []): array
     {
+        $feature = (string) ($opts['feature'] ?? (!empty($opts['model']) ? 'test' : 'write'));
+        $opts = llm_request_options($opts, $feature);
+        if ((float) $opts['deadline'] <= microtime(true)) {
+            return llm_error('timeout', true);
+        }
         // Đường test override cũ: có model chuỗi + endpoint/key trong settings cũ.
         if (!empty($opts['model']) && is_string($opts['model'])) {
             $endpoint = (string) get_setting('llm_endpoint', '');
@@ -213,17 +454,13 @@ if (!function_exists('llm_chat')) {
             }
         }
 
-        $feature = (string) ($opts['feature'] ?? 'write');
         unset($opts['feature']);
         $res = llm_call_feature($feature, $messages, $opts);
-        if (!empty($res['ok']) || !empty($res['error'])) {
-            // Nếu chưa cấu hình provider/model nào -> fallback về đường cũ để không vỡ hệ thống.
-            if (empty($res['ok']) && strpos((string) ($res['error'] ?? ''), 'Chưa gán model') !== false) {
-                return llm_chat_legacy($messages, $opts);
-            }
-            return $res;
+        // Chỉ fallback legacy khi cấu hình provider/model mới chưa tồn tại.
+        if (empty($res['ok']) && ($res['code'] ?? '') === 'not_configured') {
+            return llm_chat_legacy($messages, $opts);
         }
-        return llm_chat_legacy($messages, $opts);
+        return $res;
     }
 }
 
@@ -237,9 +474,10 @@ if (!function_exists('llm_chat_legacy')) {
         $fallback = (string) get_setting('llm_model_fallback', '');
 
         if ($endpoint === '' || $api_key === '') {
-            return ['ok' => false, 'text' => '', 'error' => 'Chưa cấu hình LLM. Vào Cấu hình AI để thêm provider/model.'];
+            return llm_error('not_configured');
         }
 
+        $opts = llm_request_options($opts, (string) ($opts['feature'] ?? 'write'));
         $opts['temperature'] = $opts['temperature'] ?? (float) get_setting('llm_temperature', '0.6');
         $opts['max_tokens']  = $opts['max_tokens'] ?? (int) get_setting('llm_max_tokens', '1200');
 
@@ -247,10 +485,25 @@ if (!function_exists('llm_chat_legacy')) {
         $last = ['ok' => false, 'text' => '', 'error' => 'Không gọi được LLM.'];
         foreach ($models as $m) {
             $res = llm_chat_raw($endpoint, $api_key, $m, $messages, $opts);
+            if (!empty($res['ok']) && !empty($opts['parse']) && is_callable($opts['parse'])) {
+                try {
+                    $parsed = ($opts['parse'])((string) ($res['text'] ?? ''), $res);
+                } catch (Throwable $e) {
+                    $parsed = null;
+                }
+                if ($parsed === null || $parsed === false) {
+                    $res = llm_error('invalid_output', false, (string) ($res['model_used'] ?? $m));
+                } else {
+                    $res['parsed'] = $parsed;
+                }
+            }
             if (!empty($res['ok'])) {
                 return $res;
             }
             $last = $res;
+            if (!empty($opts['single_attempt']) || microtime(true) >= (float) $opts['deadline']) {
+                break;
+            }
         }
         return $last;
     }
@@ -264,9 +517,8 @@ if (!function_exists('llm_chat_raw')) {
     {
         $endpoint = rtrim($endpoint, '/');
         if ($endpoint === '' || $api_key === '' || $model === '') {
-            return ['ok' => false, 'text' => '', 'error' => 'Thiếu endpoint, API key hoặc model.'];
+            return llm_error('invalid_request', false, $model);
         }
-        $url = $endpoint . '/chat/completions';
         $body = [
             'model'       => $model,
             'messages'    => $messages,
@@ -276,39 +528,46 @@ if (!function_exists('llm_chat_raw')) {
         if (!empty($opts['response_format'])) {
             $body['response_format'] = $opts['response_format'];
         }
-        $ch = curl_init($url);
-        curl_setopt_array($ch, [
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_POST => true,
-            CURLOPT_POSTFIELDS => json_encode($body, JSON_UNESCAPED_UNICODE),
-            CURLOPT_HTTPHEADER => [
-                'Content-Type: application/json',
-                'Authorization: Bearer ' . $api_key,
-            ],
-            CURLOPT_TIMEOUT => 60,
-        ]);
-        // Bật xác thực TLS khi có CA bundle (bảo vệ API key khỏi MITM); fallback an toàn cho local.
-        foreach ((function_exists('app_curl_ssl_opts') ? app_curl_ssl_opts() : [CURLOPT_SSL_VERIFYPEER => false]) as $optKey => $optVal) {
-            curl_setopt($ch, $optKey, $optVal);
+        $http = llm_http_json($endpoint . '/chat/completions', [
+            'Content-Type: application/json',
+            'Authorization: Bearer ' . $api_key,
+        ], $body, $opts);
+        if (empty($http['ok'])) {
+            $http['model_used'] = $model;
+            return $http;
         }
-        $resp = curl_exec($ch);
-        $http = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $err  = curl_error($ch);
-        curl_close($ch);
-
-        if ($resp === false) {
-            return ['ok' => false, 'text' => '', 'error' => 'cURL error: ' . $err];
+        $json = $http['json'];
+        $choice = $json['choices'][0] ?? null;
+        if (!is_array($choice)) {
+            return llm_error('invalid_output', false, $model);
         }
-        $json = json_decode($resp, true);
-        if ($http >= 200 && $http < 300 && is_array($json) && !empty($json['choices'][0]['message']['content'])) {
-            return [
-                'ok'         => true,
-                'text'       => trim((string) $json['choices'][0]['message']['content']),
-                'model_used' => $model,
-                'usage'      => $json['usage'] ?? null,
-            ];
+        $finishReason = strtolower((string) ($choice['finish_reason'] ?? ''));
+        if (in_array($finishReason, ['length', 'max_tokens'], true)) {
+            return llm_error('truncated_output', false, $model);
         }
-        return ['ok' => false, 'text' => '', 'error' => 'HTTP ' . $http . ' — ' . substr((string) $resp, 0, 300)];
+        if (in_array($finishReason, ['content_filter', 'content_filtered', 'safety'], true)) {
+            return llm_error('content_filtered', false, $model);
+        }
+        $content = $choice['message']['content'] ?? '';
+        if (is_array($content)) {
+            $text = '';
+            foreach ($content as $part) {
+                if (is_array($part) && ($part['type'] ?? '') === 'text') {
+                    $text .= (string) ($part['text'] ?? '');
+                }
+            }
+            $content = $text;
+        }
+        $text = trim((string) $content);
+        if ($text === '') {
+            return llm_error('invalid_output', false, $model);
+        }
+        return [
+            'ok'         => true,
+            'text'       => $text,
+            'model_used' => $model,
+            'usage'      => $json['usage'] ?? null,
+        ];
     }
 }
 
@@ -350,43 +609,42 @@ if (!function_exists('llm_anthropic_chat')) {
             $body['temperature'] = (float) $opts['temperature'];
         }
 
-        $ch = curl_init($url);
-        curl_setopt_array($ch, [
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_POST => true,
-            CURLOPT_POSTFIELDS => json_encode($body, JSON_UNESCAPED_UNICODE),
-            CURLOPT_HTTPHEADER => [
-                'Content-Type: application/json',
-                'x-api-key: ' . $api_key,
-                'anthropic-version: 2023-06-01',
-            ],
-            CURLOPT_TIMEOUT => 60,
-        ]);
-        foreach ((function_exists('app_curl_ssl_opts') ? app_curl_ssl_opts() : [CURLOPT_SSL_VERIFYPEER => false]) as $optKey => $optVal) {
-            curl_setopt($ch, $optKey, $optVal);
+        $http = llm_http_json($url, [
+            'Content-Type: application/json',
+            'x-api-key: ' . $api_key,
+            'anthropic-version: 2023-06-01',
+        ], $body, $opts);
+        if (empty($http['ok'])) {
+            $http['model_used'] = $model;
+            return $http;
         }
-        $resp = curl_exec($ch);
-        $http = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $err  = curl_error($ch);
-        curl_close($ch);
-
-        if ($resp === false) {
-            return ['ok' => false, 'text' => '', 'error' => 'cURL error: ' . $err];
+        $json = $http['json'];
+        $stopReason = strtolower((string) ($json['stop_reason'] ?? ''));
+        if ($stopReason === 'max_tokens') {
+            return llm_error('truncated_output', false, $model);
         }
-        $json = json_decode($resp, true);
-        if ($http >= 200 && $http < 300 && is_array($json) && !empty($json['content'][0]['text'])) {
-            $text = '';
-            foreach ($json['content'] as $blk) {
-                if (($blk['type'] ?? '') === 'text') { $text .= $blk['text']; }
+        if (in_array($stopReason, ['refusal', 'safety', 'content_filter', 'content_filtered'], true)) {
+            return llm_error('content_filtered', false, $model);
+        }
+        if (!in_array($stopReason, ['', 'end_turn', 'stop_sequence'], true)) {
+            return llm_error('invalid_output', false, $model);
+        }
+        $text = '';
+        foreach (($json['content'] ?? []) as $blk) {
+            if (is_array($blk) && ($blk['type'] ?? '') === 'text') {
+                $text .= (string) ($blk['text'] ?? '');
             }
-            return [
-                'ok'         => true,
-                'text'       => trim($text),
-                'model_used' => $model,
-                'usage'      => $json['usage'] ?? null,
-            ];
         }
-        return ['ok' => false, 'text' => '', 'error' => 'HTTP ' . $http . ' — ' . substr((string) $resp, 0, 300)];
+        $text = trim($text);
+        if ($text === '') {
+            return llm_error('invalid_output', false, $model);
+        }
+        return [
+            'ok'         => true,
+            'text'       => $text,
+            'model_used' => $model,
+            'usage'      => $json['usage'] ?? null,
+        ];
     }
 }
 
@@ -437,45 +695,33 @@ if (!function_exists('llm_openai_image')) {
             }
         }
         if ($prompt === '') {
-            return ['ok' => false, 'text' => '', 'error' => 'Thiếu prompt tạo ảnh.'];
+            return llm_error('invalid_request', false, $model);
         }
         $size = (string) ($opts['size'] ?? '1024x1024');
-
-        $ch = curl_init($endpoint . '/images/generations');
-        curl_setopt_array($ch, [
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_POST => true,
-            CURLOPT_POSTFIELDS => json_encode(['model' => $model, 'prompt' => $prompt, 'size' => $size, 'n' => 1], JSON_UNESCAPED_UNICODE),
-            CURLOPT_HTTPHEADER => [
-                'Content-Type: application/json',
-                'Authorization: Bearer ' . $api_key,
-            ],
-            CURLOPT_TIMEOUT => 120,
-        ]);
-        foreach ((function_exists('app_curl_ssl_opts') ? app_curl_ssl_opts() : [CURLOPT_SSL_VERIFYPEER => false]) as $optKey => $optVal) {
-            curl_setopt($ch, $optKey, $optVal);
+        $http = llm_http_json($endpoint . '/images/generations', [
+            'Content-Type: application/json',
+            'Authorization: Bearer ' . $api_key,
+        ], ['model' => $model, 'prompt' => $prompt, 'size' => $size, 'n' => 1], $opts);
+        if (empty($http['ok'])) {
+            $http['model_used'] = $model;
+            return $http;
         }
-        $resp = curl_exec($ch);
-        $http = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $err  = curl_error($ch);
-        curl_close($ch);
-
-        if ($resp === false) {
-            return ['ok' => false, 'text' => '', 'error' => 'cURL error: ' . $err];
+        $json = $http['json'];
+        $d = $json['data'][0] ?? null;
+        if (!is_array($d)) {
+            return llm_error('invalid_output', false, $model);
         }
-        $json = json_decode($resp, true);
-        if ($http >= 200 && $http < 300 && is_array($json) && !empty($json['data'][0])) {
-            $d = $json['data'][0];
-            $imageUrl = !empty($d['url']) ? (string) $d['url']
-                : (!empty($d['b64_json']) ? 'data:image/png;base64,' . $d['b64_json'] : '');
-            return [
-                'ok'         => true,
-                'text'       => $prompt,
-                'image_url'  => $imageUrl,
-                'model_used' => $model,
-            ];
+        $imageUrl = !empty($d['url']) ? (string) $d['url']
+            : (!empty($d['b64_json']) ? 'data:image/png;base64,' . $d['b64_json'] : '');
+        if ($imageUrl === '') {
+            return llm_error('invalid_output', false, $model);
         }
-        return ['ok' => false, 'text' => '', 'error' => 'HTTP ' . $http . ' — ' . substr((string) $resp, 0, 300)];
+        return [
+            'ok'         => true,
+            'text'       => $prompt,
+            'image_url'  => $imageUrl,
+            'model_used' => $model,
+        ];
     }
 }
 
@@ -559,13 +805,27 @@ if (!function_exists('ai_content_rules')) {
     }
 }
 
+if (!function_exists('llm_parse_json_object')) {
+    function llm_parse_json_object(string $text): ?array
+    {
+        $parsed = json_decode($text, true);
+        if (!is_array($parsed) && preg_match('/\{.*\}/s', $text, $mm)) {
+            $parsed = json_decode($mm[0], true);
+        }
+        return is_array($parsed) ? $parsed : null;
+    }
+}
+
 if (!function_exists('ai_generate_article')) {
     /**
      * Sinh đồng thời tiêu đề + mô tả ngắn + nội dung HTML (bắt đầu H2) + chèn ảnh.
      * @return array ['ok'=>bool, 'title','description','content','model','error']
      */
-    function ai_generate_article(string $name, string $seedText = '', array $images = []): array
+    function ai_generate_article(string $name, string $seedText = '', array $images = [], array $opts = []): array
     {
+        if (trim($name) === '' && trim($seedText) === '') {
+            return ['ok' => false, 'error' => 'no_content', 'code' => 'invalid_request', 'retryable' => false, 'model' => ''];
+        }
         $rules = ai_content_rules();
         $system = "Bạn là chuyên gia copywriting + SEO thương mại điện tử người Việt. Dựa trên thông tin sản phẩm, viết lại đồng thời 3 phần và CHỈ trả về JSON object đúng định dạng:\n"
             . "{\n  \"title\": \"Tiêu đề ngắn gọn, chuẩn SEO, tối đa ~65 ký tự\",\n  \"description\": \"Mô tả ngắn 2-3 câu, chuẩn SEO, chứa từ khóa chính\",\n  \"content\": \"Nội dung chi tiết HTML, BẮT ĐẦU bằng thẻ <h2>\"\n}\n\n"
@@ -582,17 +842,31 @@ if (!function_exists('ai_generate_article')) {
         $res = llm_chat([
             ['role' => 'system', 'content' => $system],
             ['role' => 'user', 'content' => $user],
-        ], ['max_tokens' => 4000, 'temperature' => 0.7, 'response_format' => ['type' => 'json_object']]);
+        ], array_replace([
+            'max_tokens' => 4000,
+            'temperature' => 0.7,
+            'response_format' => ['type' => 'json_object'],
+            'parse' => static fn(string $text): ?array => llm_parse_json_object($text),
+        ], $opts));
 
         if (empty($res['ok'])) {
-            return ['ok' => false, 'error' => $res['error'] ?? 'Lỗi gọi AI.'];
+            return [
+                'ok' => false,
+                'error' => $res['error'] ?? 'Lỗi gọi AI.',
+                'code' => $res['code'] ?? 'request_rejected',
+                'retryable' => !empty($res['retryable']),
+                'model' => $res['model_used'] ?? '',
+            ];
         }
-        $parsed = json_decode($res['text'], true);
-        if (!is_array($parsed) && preg_match('/\{.*\}/s', $res['text'], $mm)) {
-            $parsed = json_decode($mm[0], true);
-        }
+        $parsed = is_array($res['parsed'] ?? null) ? $res['parsed'] : llm_parse_json_object((string) ($res['text'] ?? ''));
         if (!is_array($parsed)) {
-            return ['ok' => false, 'error' => 'AI trả về không đúng định dạng.'];
+            return [
+                'ok' => false,
+                'error' => llm_error('invalid_output')['error'],
+                'code' => 'invalid_output',
+                'retryable' => false,
+                'model' => $res['model_used'] ?? '',
+            ];
         }
         $content_html = trim((string) ($parsed['content'] ?? ''));
         $content_html = preg_replace('/^```[a-z]*\s*|\s*```$/i', '', $content_html);
@@ -711,11 +985,11 @@ if (!function_exists('ai_generate_seo')) {
      * Sinh dữ liệu SEO (meta_title, meta_description, focus_keyword, meta_keywords).
      * @return array ['ok'=>bool,'meta_title','meta_description','focus_keyword','meta_keywords','model','error']
      */
-    function ai_generate_seo(string $title, string $desc = '', string $content = ''): array
+    function ai_generate_seo(string $title, string $desc = '', string $content = '', array $opts = []): array
     {
         $title = trim(strip_tags($title));
         if ($title === '') {
-            return ['ok' => false, 'error' => 'no_title'];
+            return ['ok' => false, 'error' => 'no_title', 'code' => 'invalid_request', 'retryable' => false, 'model' => ''];
         }
         $context = "TIÊU ĐỀ GỐC: $title\n";
         if ($desc !== '') $context .= "MÔ TẢ GỐC: " . mb_substr(strip_tags($desc), 0, 400) . "\n";
@@ -733,17 +1007,32 @@ if (!function_exists('ai_generate_seo')) {
         $res = llm_chat([
             ['role' => 'system', 'content' => $system_prompt],
             ['role' => 'user', 'content' => "Dữ liệu nguồn:\n$context\nHãy tạo ra kết quả SEO hoàn hảo nhất."],
-        ], ['feature' => 'seo', 'temperature' => 0.1, 'max_tokens' => 800, 'response_format' => ['type' => 'json_object']]);
+        ], array_replace([
+            'feature' => 'seo',
+            'temperature' => 0.1,
+            'max_tokens' => 800,
+            'response_format' => ['type' => 'json_object'],
+            'parse' => static fn(string $text): ?array => llm_parse_json_object($text),
+        ], $opts));
 
         if (empty($res['ok'])) {
-            return ['ok' => false, 'error' => $res['error'] ?? 'api_error'];
+            return [
+                'ok' => false,
+                'error' => $res['error'] ?? 'api_error',
+                'code' => $res['code'] ?? 'request_rejected',
+                'retryable' => !empty($res['retryable']),
+                'model' => $res['model_used'] ?? '',
+            ];
         }
-        $seo = json_decode($res['text'], true);
-        if (!is_array($seo) && preg_match('/\{.*\}/s', $res['text'], $mm)) {
-            $seo = json_decode($mm[0], true);
-        }
+        $seo = is_array($res['parsed'] ?? null) ? $res['parsed'] : llm_parse_json_object((string) ($res['text'] ?? ''));
         if (!is_array($seo)) {
-            return ['ok' => false, 'error' => 'api_error'];
+            return [
+                'ok' => false,
+                'error' => llm_error('invalid_output')['error'],
+                'code' => 'invalid_output',
+                'retryable' => false,
+                'model' => $res['model_used'] ?? '',
+            ];
         }
         $kw = $seo['meta_keywords'] ?? [];
         if (is_string($kw)) { $kw = array_filter(array_map('trim', explode(',', $kw))); }
@@ -823,11 +1112,11 @@ if (!function_exists('ai_rewrite_blog_post')) {
      * Nội dung bắt đầu từ <h2> (H1 = tiêu đề đã render tự động). Giữ lại video YouTube nếu có.
      * @return array ['ok'=>bool,'content','description','model','error']
      */
-    function ai_rewrite_blog_post(string $title, string $seed = '', string $youtubeId = ''): array
+    function ai_rewrite_blog_post(string $title, string $seed = '', string $youtubeId = '', array $opts = []): array
     {
         $title = trim(strip_tags($title));
         if ($title === '') {
-            return ['ok' => false, 'error' => 'no_title'];
+            return ['ok' => false, 'error' => 'no_title', 'code' => 'invalid_request', 'retryable' => false, 'model' => ''];
         }
         $system = "Bạn là biên tập viên blog kiêm chuyên gia SEO/GEO người Việt. Viết lại thành một BÀI BLOG hoàn chỉnh, hữu ích, chuẩn SEO và GEO. CHỈ trả về JSON object:\n"
             . "{\n  \"description\": \"Tóm tắt 2-3 câu, chứa từ khóa chính\",\n  \"content\": \"Nội dung HTML, BẮT ĐẦU bằng thẻ <h2>\"\n}\n\n"
@@ -850,17 +1139,31 @@ if (!function_exists('ai_rewrite_blog_post')) {
         $res = llm_chat([
             ['role' => 'system', 'content' => $system],
             ['role' => 'user', 'content' => $user],
-        ], ['max_tokens' => 4000, 'temperature' => 0.7, 'response_format' => ['type' => 'json_object']]);
+        ], array_replace([
+            'max_tokens' => 4000,
+            'temperature' => 0.7,
+            'response_format' => ['type' => 'json_object'],
+            'parse' => static fn(string $text): ?array => llm_parse_json_object($text),
+        ], $opts));
 
         if (empty($res['ok'])) {
-            return ['ok' => false, 'error' => $res['error'] ?? 'api_error'];
+            return [
+                'ok' => false,
+                'error' => $res['error'] ?? 'api_error',
+                'code' => $res['code'] ?? 'request_rejected',
+                'retryable' => !empty($res['retryable']),
+                'model' => $res['model_used'] ?? '',
+            ];
         }
-        $parsed = json_decode($res['text'], true);
-        if (!is_array($parsed) && preg_match('/\{.*\}/s', $res['text'], $mm)) {
-            $parsed = json_decode($mm[0], true);
-        }
+        $parsed = is_array($res['parsed'] ?? null) ? $res['parsed'] : llm_parse_json_object((string) ($res['text'] ?? ''));
         if (!is_array($parsed)) {
-            return ['ok' => false, 'error' => 'bad_format'];
+            return [
+                'ok' => false,
+                'error' => llm_error('invalid_output')['error'],
+                'code' => 'invalid_output',
+                'retryable' => false,
+                'model' => $res['model_used'] ?? '',
+            ];
         }
         $content = trim((string) ($parsed['content'] ?? ''));
         $content = preg_replace('/^```[a-z]*\s*|\s*```$/i', '', $content);

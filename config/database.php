@@ -1,7 +1,7 @@
 <?php
 // config/database.php
 
-require_once 'config.php';
+require_once __DIR__ . '/config.php';
 
 /**
  * Tạo kết nối PDO mới (dùng lại khi cần kết nối lại sau tác vụ dài).
@@ -23,25 +23,45 @@ function db_connect(): PDO
  */
 function db_ensure_alive(PDO &$pdo): void
 {
+    $original = $pdo;
+    $inTransaction = false;
     try {
+        $inTransaction = $pdo->inTransaction();
         $pdo->query('SELECT 1');
-    } catch (Throwable $e) {
-        try {
-            $pdo = db_connect();
-        } catch (Throwable $e2) {
-            // Để truy vấn kế tiếp ném lỗi rõ ràng nếu vẫn không kết nối được.
+        return;
+    } catch (PDOException $e) {
+        $driverCode = (int) ($e->errorInfo[1] ?? 0);
+        $state = (string) ($e->errorInfo[0] ?? $e->getCode());
+        $disconnected = in_array($driverCode, [2006, 2013, 2055], true)
+            || in_array($state, ['08003', '08006', '08S01'], true);
+        if ($inTransaction) {
+            throw new RuntimeException('db_transaction_lost');
         }
+        if (!$disconnected) {
+            throw new RuntimeException('db_health_check_failed');
+        }
+    } catch (Throwable $e) {
+        throw new RuntimeException('db_health_check_failed');
     }
+    try {
+        $replacement = db_connect();
+    } catch (Throwable $e) {
+        throw new RuntimeException('db_reconnect_failed');
+    }
+    // Replace the shared connection only when it is the same instance, not an unrelated DB.
+    if (($GLOBALS['pdo'] ?? null) === $original) {
+        $GLOBALS['pdo'] = $replacement;
+    }
+    $pdo = $replacement;
 }
 
 try {
     $pdo = db_connect();
 
 } catch (PDOException $e) {
-    error_log('Database connection error: ' . $e->getMessage());
+    error_log('Database connection failed.');
     if (PHP_SAPI === 'cli') {
-        // Keep CLI diagnostics usable for maintenance scripts.
-        throw $e;
+        throw new RuntimeException('db_connection_failed');
     }
     die('Database connection failed. Please check server configuration.');
 }

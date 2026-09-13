@@ -456,8 +456,12 @@ document.addEventListener('DOMContentLoaded', function () {
     const closeBtn = document.getElementById('catAiClose');
     function setBar(d, t) { const p = t ? Math.round(d / t * 100) : 0; bar.style.width = p + '%'; bar.textContent = p + '%'; }
     function logLine(id, title, ok, msg) {
-        const cls = ok ? 'text-success' : 'text-danger', ico = ok ? 'bi-check-circle-fill' : 'bi-x-circle-fill';
-        logEl.insertAdjacentHTML('beforeend', `<div class="${cls}"><i class="bi ${ico} me-1"></i>#${id} ${title ? '— ' + title : ''}: ${msg}</div>`);
+        const line = document.createElement('div');
+        line.className = ok ? 'text-success' : 'text-danger';
+        const icon = document.createElement('i');
+        icon.className = 'bi ' + (ok ? 'bi-check-circle-fill' : 'bi-x-circle-fill') + ' me-1';
+        line.append(icon, document.createTextNode('#' + id + (title ? ' — ' + title : '') + ': ' + msg));
+        logEl.append(line);
         logEl.scrollTop = logEl.scrollHeight;
     }
     async function runBulk(action, label) {
@@ -466,19 +470,17 @@ document.addEventListener('DOMContentLoaded', function () {
         document.getElementById('catAiTitle').textContent = label + ' (' + ids.length + ' danh mục)';
         logEl.innerHTML = ''; setBar(0, ids.length); statusEl.textContent = 'Bắt đầu...';
         closeBtn.disabled = true; pmModal.show();
-        let ok = 0, fail = 0;
-        for (let i = 0; i < ids.length; i++) {
-            statusEl.textContent = `Đang xử lý ${i + 1}/${ids.length} (ID ${ids[i]})...`;
-            try {
-                const body = new URLSearchParams({ action, id: ids[i], save: '1', csrf_token: CAT_CSRF });
-                const r = await fetch('../ajax/category-ai.php', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: body.toString() });
-                const d = await r.json();
-                if (d.success) { ok++; logLine(ids[i], d.title || '', true, d.message || 'OK'); }
-                else { fail++; logLine(ids[i], d.title || '', false, d.message || 'Lỗi'); }
-            } catch (e) { fail++; logLine(ids[i], '', false, 'Lỗi kết nối'); }
-            setBar(i + 1, ids.length);
-        }
-        statusEl.innerHTML = `<strong>Hoàn tất:</strong> ${ok} thành công, ${fail} lỗi.`;
+        try {
+            const body = new URLSearchParams({ action, ids: ids.join(','), save: '1', csrf_token: CAT_CSRF });
+            const accepted = await AIJobs.send('../ajax/category-ai.php', body);
+            const jobs = await AIJobs.waitBatch(accepted, { onProgress: p => {
+                statusEl.textContent = AIJobs.progressText(p);
+                setBar(p.done || 0, p.total || ids.length);
+            }});
+            let ok = 0, fail = 0;
+            jobs.forEach(job => { const good = job.status === 'succeeded'; good ? ok++ : fail++; logLine(job.entity_id || job.id, '', good, job.message || job.status); });
+            statusEl.textContent = `Hoàn tất: ${ok} thành công, ${fail} lỗi.`;
+        } catch (e) { statusEl.textContent = e.message || 'Không đọc được trạng thái hàng đợi.'; }
         closeBtn.disabled = false;
     }
     const br = document.getElementById('btnCatBulkRewrite');

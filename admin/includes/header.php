@@ -35,10 +35,11 @@ if (!headers_sent()) {
     <!-- Bootstrap Icons -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
 
-    <!-- Define BASE_URL for JavaScript -->
+    <!-- Define BASE_URL and durable AI queue client for admin pages. -->
     <script>
-        const BASE_URL = '<?php echo BASE_URL; ?>';
+        const BASE_URL = <?php echo json_encode(BASE_URL, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     </script>
+    <script src="<?php echo e(BASE_URL); ?>assets/js/ai-jobs.js?v=<?php echo (int) @filemtime(__DIR__ . '/../../assets/js/ai-jobs.js'); ?>"></script>
 
     <!-- Admin Dashboard CSS -->
     <style>
@@ -578,6 +579,10 @@ catch (Exception $e) { /* Ignore sidebar error */
             <a href="<?php echo BASE_URL; ?>admin/ai/index.php"
                 class="nav-link-admin <?php echo ($current_page == 'ai') ? 'active' : ''; ?>">
                 <i class="bi bi-robot"></i> Cấu hình AI
+            </a>
+            <a href="<?php echo BASE_URL; ?>admin/ai/jobs.php"
+                class="nav-link-admin <?php echo ($current_page == 'ai-jobs') ? 'active' : ''; ?>">
+                <i class="bi bi-list-task"></i> Hàng đợi AI
             </a>
             <?php $seo_open = in_array($current_page, ['seo', 'seo-redirects']); ?>
             <button class="nav-link-admin nav-group-toggle w-100 text-start border-0 bg-transparent"

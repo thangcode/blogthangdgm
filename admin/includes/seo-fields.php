@@ -17,11 +17,9 @@ $meta_keywords = $seo_data['meta_keywords'] ?? '';
 $preview_title = $seo_data['preview_title'] ?? 'Tiêu đề trang';
 $preview_url = $seo_data['preview_url'] ?? BASE_URL;
 
-// LLM config — Auto SEO bật khi đã cấu hình llm_api_key (backend groq-seo.php dùng key này).
-$_seo_groq_enabled = false;
-if (isset($pdo)) {
-    $_seo_groq_enabled = trim((string) get_setting('llm_api_key', '')) !== '';
-}
+// Provider-neutral AI availability; no credential is exposed to the browser.
+if (!function_exists('llm_feature_available')) require_once __DIR__ . '/../../includes/llm.php';
+$_seo_ai_enabled = function_exists('llm_feature_available') && llm_feature_available('seo');
 ?>
 
 <!-- SEO Meta Box -->
@@ -46,7 +44,7 @@ if (isset($pdo)) {
                 <button type="button" class="btn btn-auto-seo" id="btnAutoSeo" onclick="autoSEO()"
                     title="Tự động điền SEO tối ưu">
                     <i class="bi bi-magic"></i> Auto SEO
-                    <?php if ($_seo_groq_enabled): ?><span class="badge bg-warning text-dark ms-1"
+                    <?php if ($_seo_ai_enabled): ?><span class="badge bg-warning text-dark ms-1"
                             style="font-size:9px;vertical-align:middle">AI</span><?php endif; ?>
                 </button>
             </div>
@@ -905,11 +903,9 @@ if (isset($pdo)) {
             : init();
     })();
 
-    /* ═══════════════════════════════════════════════
-       AUTO SEO — Groq AI Only
-       ═══════════════════════════════════════════════ */
-    const GROQ_ENABLED = <?php echo $_seo_groq_enabled ? 'true' : 'false'; ?>;
-    const GROQ_SEO_URL = '<?php echo rtrim(BASE_URL, '/') . '/admin/ajax/groq-seo.php'; ?>';
+    /* Provider-neutral Auto SEO, processed by the durable AI queue. */
+    const AI_SEO_ENABLED = <?php echo $_seo_ai_enabled ? 'true' : 'false'; ?>;
+    const AI_SEO_URL = '<?php echo rtrim(BASE_URL, '/') . '/admin/ajax/groq-seo.php'; ?>';
     const SEO_SITE_NAME = <?php echo json_encode(get_setting('site_name', 'ShopSieuSale')); ?>;
     const SEO_SEP = <?php echo json_encode(get_setting('seo_title_separator', ' | ')); ?>;
 
@@ -923,12 +919,9 @@ if (isset($pdo)) {
 
     function autoSEO() {
         const btn = document.getElementById('btnAutoSeo');
-        if (!GROQ_ENABLED) {
-            if (window.AdminPopup) {
-                AdminPopup.error('<strong>Chưa cấu hình Groq API</strong><br>Vào <a href="../seo/" class="alert-link text-white text-decoration-underline">Cấu hình SEO</a> để thêm API key miễn phí.');
-            } else {
-                alert('⚡ Tính năng Auto SEO cần Groq AI. Vui lòng cấu hình trong Settings.');
-            }
+        if (!AI_SEO_ENABLED) {
+            if (window.AdminPopup) AdminPopup.error('Chưa cấu hình model AI cho tính năng SEO.');
+            else alert('Chưa cấu hình model AI cho tính năng SEO.');
             return;
         }
 
@@ -961,25 +954,22 @@ if (isset($pdo)) {
             fd.append('csrf_token', csrfToken);
         }
 
-        fetch(GROQ_SEO_URL, {
-            method: 'POST',
-            body: fd,
-            headers: csrfToken ? { 'X-CSRF-Token': csrfToken } : {}
-        })
-            .then(r => r.json())
+        AIJobs.run(AI_SEO_URL, fd, { onProgress: p => {
+            if (btn) btn.textContent = AIJobs.progressText(p);
+        } })
             .then(data => {
-                if (!data.success) throw new Error(data.message || data.error || 'Lỗi API');
-
                 const titleEl = document.getElementById('metaTitle');
-                if (titleEl) { titleEl.value = data.meta_title; titleEl.dispatchEvent(new Event('input')); }
+                if (titleEl && data.meta_title) { titleEl.value = data.meta_title; titleEl.dispatchEvent(new Event('input')); }
 
                 const descEl = document.getElementById('metaDescription');
-                if (descEl) { descEl.value = data.meta_description; descEl.dispatchEvent(new Event('input')); }
+                if (descEl && data.meta_description) { descEl.value = data.meta_description; descEl.dispatchEvent(new Event('input')); }
 
-                setTagInputValues('focusKeywordHidden', [data.focus_keyword]);
-                setTagInputValues('metaKeywordsHidden', data.meta_keywords);
+                if (data.focus_keyword) setTagInputValues('focusKeywordHidden', [data.focus_keyword]);
+                if (data.meta_keywords) setTagInputValues('metaKeywordsHidden', data.meta_keywords);
 
                 if (typeof refreshAll === 'function') refreshAll();
+
+                if (!data.success) throw new Error(data.message || data.error || 'Lỗi API');
 
                 if (btn) {
                     btn.disabled = false;
@@ -993,13 +983,13 @@ if (isset($pdo)) {
                 }
             })
             .catch(err => {
-                console.error('Groq SEO error:', err);
+                console.error('AI SEO error:', err);
                 if (btn) {
                     btn.disabled = false;
                     btn.classList.remove('loading');
                     btn.innerHTML = '<i class="bi bi-magic"></i> Auto SEO <span class="badge bg-warning text-dark ms-1" style="font-size:9px;vertical-align:middle">AI</span>';
                 }
-                AdminPopup.error('Auto SEO thất bại: ' + (err.message || 'Lỗi kết nối Groq API'));
+                AdminPopup.error('Auto SEO thất bại: ' + (err.message || 'Không đọc được trạng thái hàng đợi AI.'));
             });
     }
 

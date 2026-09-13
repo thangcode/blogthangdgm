@@ -218,6 +218,50 @@ class PageCache
     }
 
     /**
+     * Xóa cache liên quan khi nội dung thay đổi.
+     * - Xóa trang chủ vì mọi loại nội dung có thể xuất hiện ở các block.
+     * - Xóa đúng trang chi tiết khi có slug.
+     * - Bài viết còn làm thay đổi các trang category/tag có phân trang.
+     * Trả về số file đã xóa.
+     */
+    public static function invalidateContent(string $type = '', int $id = 0, string $slug = ''): int
+    {
+        $type = strtolower(trim($type));
+        $slug = preg_replace('/[^a-z0-9-]/', '', strtolower(trim($slug)));
+        $count = 0;
+
+        if (self::delete('homepage')) {
+            $count++;
+        }
+        if ($slug !== '' && in_array($type, ['post', 'page', 'category', 'tag', 'product'], true)) {
+            if (self::delete($type . '_' . $slug)) {
+                $count++;
+            }
+        }
+
+        $dir = self::dir();
+        if (!is_dir($dir)) {
+            return $count;
+        }
+        $prefixes = [];
+        if ($type === 'post') {
+            $prefixes = ['category_', 'tag_'];
+        } elseif ($type === 'category') {
+            $prefixes = $slug !== '' ? ['category_' . $slug] : ['category_'];
+        } elseif ($type === 'tag') {
+            $prefixes = $slug !== '' ? ['tag_' . $slug] : ['tag_'];
+        }
+        foreach ($prefixes as $prefix) {
+            foreach (glob($dir . DIRECTORY_SEPARATOR . $prefix . '*.html') ?: [] as $file) {
+                if (basename($file) !== 'index.html' && @unlink($file)) {
+                    $count++;
+                }
+            }
+        }
+        return $count;
+    }
+
+    /**
      * Xóa toàn bộ file cache (gọi khi admin bấm "Xóa cache").
      * Trả về số file đã xóa.
      */

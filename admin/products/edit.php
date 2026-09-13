@@ -947,25 +947,15 @@ document.addEventListener('DOMContentLoaded', function () {
         if (window.AdminSecurity) { AdminSecurity.applyCsrf(body); }
         else { body.set('csrf_token', csrf); }
 
-        fetch('../ajax/ai-rewrite.php', {
-            method: 'POST',
-            headers: window.AdminSecurity
-                ? AdminSecurity.headers({ 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' })
-                : { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
-            body: body
-        })
-            .then(r => r.json())
+        AIJobs.run('../ajax/ai-rewrite.php', body, { onProgress: p => {
+            if (resultEl) resultEl.textContent = AIJobs.progressText(p);
+        } })
             .then(data => {
                 btn.disabled = false;
                 btn.innerHTML = original;
-                if (!data.success) {
-                    if (resultEl) { resultEl.className = 'form-text text-danger'; resultEl.textContent = 'Lỗi AI: ' + (data.message || 'không rõ'); }
-                    if (onDone) onDone(false);
-                    return;
-                }
+                const applied = !!(data && (data.title || data.description || data.content));
                 if (data.title && nameEl) {
                     nameEl.value = data.title;
-                    // Sinh lại slug theo tiêu đề mới
                     const slugEl = document.getElementById('slug');
                     if (slugEl) {
                         slugEl.value = aiSlugify(data.title);
@@ -980,6 +970,16 @@ document.addEventListener('DOMContentLoaded', function () {
                         const c = document.getElementById('content');
                         if (c) c.value = data.content;
                     }
+                }
+                if (!data.success) {
+                    if (resultEl) {
+                        resultEl.className = 'form-text text-danger';
+                        resultEl.textContent = applied
+                            ? ((data.message || 'Không hoàn tất') + ' Nội dung đã điền một phần; kiểm tra trước khi lưu.')
+                            : ('Lỗi AI: ' + (data.message || 'không rõ'));
+                    }
+                    if (onDone) onDone(false);
+                    return;
                 }
                 if (resultEl) { resultEl.className = 'form-text text-success'; resultEl.textContent = 'Đã viết lại Tên + Mô tả + Nội dung. Kiểm tra lại trước khi lưu.'; }
                 if (onDone) onDone(true);

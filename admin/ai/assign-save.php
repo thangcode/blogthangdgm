@@ -25,11 +25,25 @@ function ai_upsert(PDO $pdo, string $key, string $value): void {
 }
 
 try {
+    // Kiểm tra model hợp lệ theo tính năng: vision cần can_vision=1, image cần kind=image.
+    // Model không đạt -> lưu 0 (không gán) để tránh "đã chọn nhưng resolve bỏ qua".
+    $checkModel = $pdo->prepare('SELECT kind, can_vision, status FROM ai_models WHERE id = ?');
+    $validModel = function (int $id, string $feature) use ($checkModel): int {
+        if ($id <= 0) return 0;
+        $checkModel->execute([$id]);
+        $m = $checkModel->fetch(PDO::FETCH_ASSOC);
+        if (!$m || (int) $m['status'] !== 1) return 0;
+        if ($feature === 'image') return ($m['kind'] === 'image') ? $id : 0;
+        if ($m['kind'] !== 'chat') return 0;
+        if ($feature === 'vision' && (int) $m['can_vision'] !== 1) return 0;
+        return $id;
+    };
+
     // Gán model theo tính năng (lưu id, mặc định 0).
     foreach (['write', 'seo', 'vision', 'image'] as $f) {
         foreach (['primary', 'fallback'] as $slot) {
             $key = 'ai_' . $f . '_' . $slot;
-            ai_upsert($pdo, $key, (string) (int) ($_POST[$key] ?? 0));
+            ai_upsert($pdo, $key, (string) $validModel((int) ($_POST[$key] ?? 0), $f));
         }
     }
 

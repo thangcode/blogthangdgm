@@ -198,7 +198,7 @@ $jobBadges = [
                     <div id="ideaRows">
                         <div class="idea-row mb-2">
                             <input type="text" class="form-control form-control-sm mb-1 idea-title" maxlength="500" placeholder="Tiêu đề / từ khóa *">
-                            <input type="text" class="form-control form-control-sm idea-desc" maxlength="2000" placeholder="Mô tả / yêu cầu thêm cho AI (tuỳ chọn)">
+                            <textarea class="form-control form-control-sm idea-desc" rows="2" maxlength="2000" placeholder="Mô tả / yêu cầu thêm cho AI (tuỳ chọn): góc nhìn, đối tượng độc giả, điểm cần nhấn, CTA..."></textarea>
                         </div>
                     </div>
                     <div class="d-flex gap-2 mt-2">
@@ -394,7 +394,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const row = document.createElement('div');
         row.className = 'idea-row mb-2 d-flex gap-1 align-items-start';
         row.innerHTML = '<div class="flex-grow-1"><input type="text" class="form-control form-control-sm mb-1 idea-title" maxlength="500" placeholder="Tiêu đề / từ khóa *">'
-            + '<input type="text" class="form-control form-control-sm idea-desc" maxlength="2000" placeholder="Mô tả / yêu cầu thêm cho AI (tuỳ chọn)"></div>'
+            + '<textarea class="form-control form-control-sm idea-desc" rows="2" maxlength="2000" placeholder="Mô tả / yêu cầu thêm cho AI (tuỳ chọn): góc nhìn, đối tượng độc giả, điểm cần nhấn, CTA..."></textarea></div>'
             + '<button type="button" class="btn btn-sm btn-light border rounded-pill px-2 btn-del-row" title="Bỏ dòng"><i class="bi bi-x-lg text-danger"></i></button>';
         row.querySelector('.btn-del-row').addEventListener('click', () => row.remove());
         ideaRows.appendChild(row);

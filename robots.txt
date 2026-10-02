@@ -3,6 +3,10 @@
 User-agent: *
 Allow: /
 
+# Luôn cho phép static assets (kể cả URL có ?v=) — rule dài hơn sẽ thắng /*?*
+Allow: /assets/
+Allow: /cache/
+
 # Khu vực không index
 Disallow: /admin/
 Disallow: /api/

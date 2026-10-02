@@ -439,11 +439,11 @@ if (!isset($seo)) {
     <meta name="csrf-token" content="<?php echo $csrf_cache_on ? '' : e(generate_csrf_token()); ?>"<?php echo $csrf_cache_on ? ' data-csrf-hydrate="1"' : ''; ?>>
 
     <?php
-    // Favicon — cache version bằng cache_version setting (tránh filemtime() filesystem IO mỗi request)
+    // Favicon — KHÔNG gắn ?v= vì robots.txt chặn /*?* khiến Google Favicon bị block.
+    // upload_file() tạo tên file unique mỗi lần upload nên URL mới tự bust cache.
     $favicon_path = $site_favicon;
-    $favicon_ver  = get_setting('cache_version', '1');
     $is_fav_abs   = (strpos($favicon_path, 'http') === 0 || strpos($favicon_path, '//') === 0);
-    $favicon_url  = ($is_fav_abs ? $favicon_path : BASE_URL . $favicon_path) . '?v=' . $favicon_ver;
+    $favicon_url  = $is_fav_abs ? $favicon_path : BASE_URL . $favicon_path;
     $favicon_ext  = strtolower(pathinfo($favicon_path, PATHINFO_EXTENSION));
     $favicon_types = ['ico' => 'image/x-icon', 'png' => 'image/png', 'svg' => 'image/svg+xml', 'jpg' => 'image/jpeg', 'gif' => 'image/gif'];
     $favicon_type = $favicon_types[$favicon_ext] ?? 'image/x-icon';

@@ -3,6 +3,7 @@ session_start();
 require_once '../../config/database.php';
 require_once '../../includes/functions.php';
 require_once '../../includes/ai-jobs.php';
+require_once '../../includes/ai-endpoint.php';
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
 
@@ -26,6 +27,7 @@ try {
         $id=(int)($_POST['id']??0);$action=(string)($_POST['action']??'');
         $ok=$action==='cancel'?ai_jobs_request_cancel($pdo,$ownerId,$id):($action==='retry'?ai_jobs_retry($pdo,$ownerId,$id):false);
         if(!$ok){http_response_code(409);echo json_encode(['success'=>false,'message'=>'Không thể thực hiện hành động với trạng thái hiện tại.']);exit;}
+        if($action==='retry')ai_jobs_kick_worker();
         echo json_encode(['success'=>true,'message'=>$action==='cancel'?'Đã yêu cầu hủy.':'Đã xếp lại tác vụ.'],JSON_UNESCAPED_UNICODE);exit;
     }
     http_response_code(405);echo json_encode(['success'=>false,'message'=>'Method not allowed.']);

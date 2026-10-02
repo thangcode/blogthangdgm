@@ -35,10 +35,29 @@ function ai_endpoint_ids(): array
     return $ids;
 }
 
+/** Kích worker CLI chạy nền ngay sau khi xếp hàng (best-effort; cron vẫn là đường chắc chắn). */
+function ai_jobs_kick_worker(): bool
+{
+    $worker = realpath(__DIR__ . '/../scripts/ai-worker.php');
+    if (!$worker) { return false; }
+    $disabled = array_map('trim', explode(',', (string) ini_get('disable_functions')));
+    $php = (defined('PHP_BINARY') && PHP_BINARY && @is_file(PHP_BINARY)) ? PHP_BINARY : 'php';
+    $args = ' --max-jobs=10 --max-seconds=600';
+    if (stripos(PHP_OS, 'WIN') === 0) {
+        if (!function_exists('popen') || in_array('popen', $disabled, true)) { return false; }
+        $h = @popen('start /B "" ' . escapeshellarg($php) . ' ' . escapeshellarg($worker) . $args, 'r');
+        if ($h !== false) { @pclose($h); return true; }
+        return false;
+    }
+    if (!function_exists('exec') || in_array('exec', $disabled, true)) { return false; }
+    @exec(escapeshellarg($php) . ' ' . escapeshellarg($worker) . $args . ' > /dev/null 2>&1 &');
+    return true;
+}
+
 function ai_endpoint_enqueue(array $specs, int $ownerId): void
 {
     global $pdo;
-    try { $result=ai_jobs_enqueue_many($pdo,$ownerId,$specs); http_response_code(202); echo json_encode($result,JSON_UNESCAPED_UNICODE); exit; }
+    try { $result=ai_jobs_enqueue_many($pdo,$ownerId,$specs); $result['kicked']=ai_jobs_kick_worker(); http_response_code(202); echo json_encode($result,JSON_UNESCAPED_UNICODE); exit; }
     catch(InvalidArgumentException $e){ai_endpoint_error('invalid_input');}
     catch(RuntimeException $e){$code=in_array($e->getMessage(),['migration_required','conflict'],true)?$e->getMessage():'worker_error';ai_endpoint_error($code,$code==='migration_required'?503:409);}
     catch(Throwable $e){ai_endpoint_error('worker_error',500);}

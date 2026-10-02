@@ -13,25 +13,6 @@ require_once '../../includes/llm.php';
 require_once '../../includes/ai-write.php';
 require_once '../../includes/ai-endpoint.php';
 
-/** Kích worker CLI chạy nền ngay (best-effort). Cron là phương án chắc chắn. */
-function ai_write_kick_worker(): bool
-{
-    $worker = realpath(__DIR__ . '/../../scripts/ai-worker.php');
-    if (!$worker) { return false; }
-    $disabled = array_map('trim', explode(',', (string) ini_get('disable_functions')));
-    $php = (defined('PHP_BINARY') && PHP_BINARY && @is_file(PHP_BINARY)) ? PHP_BINARY : 'php';
-    $args = ' --max-jobs=10 --max-seconds=600';
-    if (stripos(PHP_OS, 'WIN') === 0) {
-        if (!function_exists('popen') || in_array('popen', $disabled, true)) { return false; }
-        $h = @popen('start /B "" ' . escapeshellarg($php) . ' ' . escapeshellarg($worker) . $args, 'r');
-        if ($h !== false) { @pclose($h); return true; }
-        return false;
-    }
-    if (!function_exists('exec') || in_array('exec', $disabled, true)) { return false; }
-    @exec(escapeshellarg($php) . ' ' . escapeshellarg($worker) . $args . ' > /dev/null 2>&1 &');
-    return true;
-}
-
 function ai_write_json(array $data, int $http = 200): void
 {
     http_response_code($http);
@@ -168,5 +149,5 @@ $upd = $pdo->prepare("UPDATE ai_write_ideas SET status='running', job_id=?, mess
 foreach ($ideaIds as $i => $ideaId) {
     if ($ideaId) $upd->execute([(int) ($result['job_ids'][$i] ?? 0), $ideaId]);
 }
-$result['kicked'] = ai_write_kick_worker();
+$result['kicked'] = ai_jobs_kick_worker();
 ai_write_json($result, 202);

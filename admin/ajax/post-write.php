@@ -47,15 +47,33 @@ $action = trim((string) ($_POST['action'] ?? 'write'));
 
 // ---- Thêm ý tưởng vào danh sách ----
 if ($action === 'add_ideas') {
-    $raw = trim((string) ($_POST['topics'] ?? $_POST['ideas'] ?? ''));
-    $lines = array_values(array_unique(array_filter(array_map('trim', preg_split('/\r\n|\r|\n/', $raw)), fn($v) => $v !== '')));
-    if (!$lines || count($lines) > 100) ai_endpoint_error('invalid_input');
-    $ins = $pdo->prepare("INSERT INTO ai_write_ideas (owner_id, idea, status, created_at, updated_at) VALUES (?, ?, 'pending', NOW(), NOW())");
+    // Dạng mới: titles[] + descs[] song song (mỗi ý tưởng = tiêu đề + mô tả tuỳ chọn).
+    // Giữ tương thích textarea 'topics': mỗi dòng 1 ý tưởng, có thể "tiêu đề || mô tả".
+    $items = [];
+    if (isset($_POST['titles']) && is_array($_POST['titles'])) {
+        $titles = $_POST['titles'];
+        $descs = is_array($_POST['descs'] ?? null) ? $_POST['descs'] : [];
+        foreach ($titles as $i => $t) {
+            $t = trim((string) $t);
+            if ($t === '') continue;
+            $items[] = [$t, trim((string) ($descs[$i] ?? ''))];
+        }
+    } else {
+        $raw = trim((string) ($_POST['topics'] ?? $_POST['ideas'] ?? ''));
+        $lines = array_filter(array_map('trim', preg_split('/\r\n|\r|\n/', $raw)), fn($v) => $v !== '');
+        foreach ($lines as $line) {
+            $parts = preg_split('/\s*\|\|\s*/', $line, 2);
+            $items[] = [trim((string) ($parts[0] ?? '')), trim((string) ($parts[1] ?? ''))];
+        }
+    }
+    $items = array_values(array_filter($items, fn($it) => $it[0] !== ''));
+    if (!$items || count($items) > 100) ai_endpoint_error('invalid_input');
+    $ins = $pdo->prepare("INSERT INTO ai_write_ideas (owner_id, idea, brief, status, created_at, updated_at) VALUES (?, ?, ?, 'pending', NOW(), NOW())");
     $added = 0;
     try {
         $pdo->beginTransaction();
-        foreach ($lines as $line) {
-            $ins->execute([$ownerId, mb_substr($line, 0, 500, 'UTF-8')]);
+        foreach ($items as [$idea, $brief]) {
+            $ins->execute([$ownerId, mb_substr($idea, 0, 500, 'UTF-8'), $brief !== '' ? mb_substr($brief, 0, 2000, 'UTF-8') : null]);
             $added++;
         }
         $pdo->commit();
@@ -96,13 +114,13 @@ if (isset($_POST['idea_ids']) || isset($_POST['idea_id'])) {
     $ids = array_values(array_unique(array_filter(array_map('intval', preg_split('/[\s,]+/', $raw)), fn($v) => $v > 0)));
     if (!$ids || count($ids) > 100) ai_endpoint_error('invalid_input');
     $ph = implode(',', array_fill(0, count($ids), '?'));
-    $st = $pdo->prepare("SELECT id, idea, status FROM ai_write_ideas WHERE owner_id = ? AND id IN ($ph)");
+    $st = $pdo->prepare("SELECT id, idea, brief, status FROM ai_write_ideas WHERE owner_id = ? AND id IN ($ph)");
     $st->execute(array_merge([$ownerId], $ids));
     $ideas = $st->fetchAll(PDO::FETCH_ASSOC);
     foreach ($ideas as $row) {
         // Chỉ xếp hàng ý tưởng chưa viết / đã lỗi; bỏ qua đang chạy hoặc đã xong.
         if (in_array($row['status'], ['pending', 'failed'], true)) {
-            $targets[] = [(int) $row['id'], (string) $row['idea']];
+            $targets[] = [(int) $row['id'], (string) $row['idea'], (string) ($row['brief'] ?? '')];
         }
     }
     if (!$targets) {
@@ -113,19 +131,19 @@ if (isset($_POST['idea_ids']) || isset($_POST['idea_id'])) {
     $lines = array_values(array_unique(array_filter(array_map('trim', preg_split('/\r\n|\r|\n/', $raw)), fn($v) => $v !== '')));
     if (!$lines || count($lines) > 100) ai_endpoint_error('invalid_input');
     foreach ($lines as $line) {
-        $targets[] = [null, trim(mb_substr($line, 0, 2000, 'UTF-8'))];
+        $targets[] = [null, trim(mb_substr($line, 0, 2000, 'UTF-8')), ''];
     }
 }
 
 $base = (string) ($_POST['request_key'] ?? '');
 $specs = [];
 $ideaIds = [];
-foreach ($targets as $i => [$ideaId, $topic]) {
+foreach ($targets as $i => [$ideaId, $topic, $brief]) {
     $specs[] = [
         'request_key' => ai_endpoint_request_key($base, $i),
         'kind' => 'write', 'action' => 'all', 'entity_id' => null,
         'payload' => [
-            'save' => true, 'topic' => $topic, 'idea_id' => $ideaId,
+            'save' => true, 'topic' => $topic, 'brief' => $brief ?? '', 'idea_id' => $ideaId,
             'target_words' => $targetWords, 'image_count' => $imageCount, 'with_thumb' => $withThumb,
             'status' => $status, 'category_id' => $categoryId, 'author_name' => $author,
         ],

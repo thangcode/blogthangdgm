@@ -104,6 +104,7 @@ try {
         id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
         owner_id BIGINT UNSIGNED NOT NULL,
         idea VARCHAR(500) NOT NULL,
+        brief TEXT DEFAULT NULL,
         status VARCHAR(20) NOT NULL DEFAULT 'pending',
         job_id BIGINT UNSIGNED DEFAULT NULL,
         post_id BIGINT UNSIGNED DEFAULT NULL,
@@ -114,6 +115,8 @@ try {
         KEY idx_aiw_owner_status (owner_id, status),
         KEY idx_aiw_post (post_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+    $colCheck->execute(['ai_write_ideas', 'brief']);
+    if (!(int) $colCheck->fetchColumn()) $pdo->exec('ALTER TABLE ai_write_ideas ADD COLUMN brief TEXT DEFAULT NULL AFTER idea');
     foreach (['posts' => ['ai_import_token' => 'CHAR(64) DEFAULT NULL'],
               'pages' => ['focus_keyword' => 'VARCHAR(255) DEFAULT NULL'],
               'categories' => ['content' => 'LONGTEXT DEFAULT NULL', 'focus_keyword' => 'VARCHAR(255) DEFAULT NULL']] as $table => $columns) {

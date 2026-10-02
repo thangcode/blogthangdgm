@@ -51,9 +51,10 @@ catch (Throwable $e) { $all_cats = []; }
 $ideas = [];
 if ($ideasReady) {
     try {
+        // Trạng thái theo job trước: post_id được gắn sớm (lúc draft rỗng) nên
+        // KHÔNG được suy ra 'done' từ post_id — chỉ 'done' khi job succeeded.
         $pdo->exec("UPDATE ai_write_ideas i LEFT JOIN ai_jobs j ON j.id = i.job_id
             SET i.status = CASE
-                WHEN i.post_id IS NOT NULL THEN 'done'
                 WHEN j.status = 'succeeded' THEN 'done'
                 WHEN j.status IN ('queued','running','retry_wait') THEN 'running'
                 WHEN j.status IN ('failed','cancelled') THEN 'failed'
@@ -194,12 +195,17 @@ $jobBadges = [
                     <h5 class="mb-0 fw-bold"><i class="bi bi-plus-circle me-2 text-success"></i>Thêm ý tưởng</h5>
                 </div>
                 <div class="card-body p-4">
-                    <label class="form-label fw-bold small">Mỗi dòng là một ý tưởng / tiêu đề</label>
-                    <div class="d-flex gap-2">
-                        <textarea id="ideasInput" class="form-control" rows="3" placeholder="Cách chạy quảng cáo Facebook hiệu quả&#10;10 mẹo tối ưu Google Ads cho người mới"></textarea>
-                        <button type="button" class="btn btn-success rounded-3 px-4 align-self-stretch" id="btnAddIdeas"><i class="bi bi-plus-lg me-1"></i>Thêm</button>
+                    <div id="ideaRows">
+                        <div class="idea-row mb-2">
+                            <input type="text" class="form-control form-control-sm mb-1 idea-title" maxlength="500" placeholder="Tiêu đề / từ khóa *">
+                            <input type="text" class="form-control form-control-sm idea-desc" maxlength="2000" placeholder="Mô tả / yêu cầu thêm cho AI (tuỳ chọn)">
+                        </div>
                     </div>
-                    <div class="form-text">Tối đa 100 dòng/lần. Ý tưởng được lưu vào danh sách — chưa viết vẫn nằm đó.</div>
+                    <div class="d-flex gap-2 mt-2">
+                        <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill px-3" id="btnAddRow"><i class="bi bi-plus-lg me-1"></i>Thêm dòng</button>
+                        <button type="button" class="btn btn-sm btn-success rounded-pill px-4" id="btnAddIdeas"><i class="bi bi-check-lg me-1"></i>Thêm vào danh sách</button>
+                    </div>
+                    <div class="form-text">Tối đa 100 ý tưởng/lần. Mô tả giúp AI viết sát ý hơn (góc nhìn, đối tượng, yêu cầu riêng).</div>
                 </div>
             </div>
 
@@ -237,11 +243,12 @@ $jobBadges = [
                                         <td class="ps-4"><input type="checkbox" class="form-check-input idea-check" value="<?php echo (int) $idea['id']; ?>" <?php echo $writable ? '' : 'disabled'; ?>></td>
                                         <td class="fw-semibold" style="max-width:340px;">
                                             <span class="d-block text-truncate" style="max-width:330px;" title="<?php echo e($idea['idea']); ?>"><?php echo e($idea['idea']); ?></span>
+                                            <?php if (trim((string) ($idea['brief'] ?? '')) !== ''): ?><small class="text-muted d-block text-truncate" style="max-width:330px;" title="<?php echo e((string) $idea['brief']); ?>"><i class="bi bi-card-text me-1"></i><?php echo e(mb_substr((string) $idea['brief'], 0, 90, 'UTF-8')); ?></small><?php endif; ?>
                                             <?php if ($errMsg !== ''): ?><small class="text-danger"><?php echo e(mb_substr($errMsg, 0, 80, 'UTF-8')); ?></small><?php endif; ?>
                                         </td>
                                         <td><?php echo $ideaBadges[$stt] ?? e($stt); ?><?php if ($stage !== ''): ?> <code class="small text-muted"><?php echo e($stage); ?></code><?php endif; ?></td>
                                         <td>
-                                            <?php if (!empty($idea['post_id'])): ?>
+                                            <?php if (!empty($idea['post_id']) && $stt === 'done'): ?>
                                                 <a href="edit.php?id=<?php echo (int) $idea['post_id']; ?>" class="small text-decoration-none" title="<?php echo e((string) ($idea['post_title'] ?? '')); ?>">
                                                     <i class="bi bi-file-earmark-text me-1"></i>#<?php echo (int) $idea['post_id']; ?> <?php echo e(mb_substr((string) ($idea['post_title'] ?? ''), 0, 30, 'UTF-8')); ?>
                                                 </a>
@@ -381,12 +388,34 @@ document.addEventListener('DOMContentLoaded', function () {
     });
     document.querySelectorAll('.idea-check').forEach(c => c.addEventListener('change', updateCount));
 
+    const ideaRows = document.getElementById('ideaRows');
+    function addIdeaRow() {
+        if (ideaRows.querySelectorAll('.idea-row').length >= 100) return;
+        const row = document.createElement('div');
+        row.className = 'idea-row mb-2 d-flex gap-1 align-items-start';
+        row.innerHTML = '<div class="flex-grow-1"><input type="text" class="form-control form-control-sm mb-1 idea-title" maxlength="500" placeholder="Tiêu đề / từ khóa *">'
+            + '<input type="text" class="form-control form-control-sm idea-desc" maxlength="2000" placeholder="Mô tả / yêu cầu thêm cho AI (tuỳ chọn)"></div>'
+            + '<button type="button" class="btn btn-sm btn-light border rounded-pill px-2 btn-del-row" title="Bỏ dòng"><i class="bi bi-x-lg text-danger"></i></button>';
+        row.querySelector('.btn-del-row').addEventListener('click', () => row.remove());
+        ideaRows.appendChild(row);
+        row.querySelector('.idea-title').focus();
+    }
+    document.getElementById('btnAddRow').addEventListener('click', addIdeaRow);
+
     document.getElementById('btnAddIdeas').addEventListener('click', async function () {
-        const text = document.getElementById('ideasInput').value.trim();
-        if (!text) { alert('Vui lòng nhập ít nhất 1 dòng ý tưởng.'); return; }
+        const params = new URLSearchParams({action: 'add_ideas', csrf_token: POST_CSRF});
+        let n = 0;
+        ideaRows.querySelectorAll('.idea-row').forEach(row => {
+            const t = row.querySelector('.idea-title').value.trim();
+            const d = row.querySelector('.idea-desc').value.trim();
+            if (t !== '') { params.append('titles[]', t); params.append('descs[]', d); n++; }
+        });
+        if (!n) { alert('Vui lòng nhập ít nhất 1 tiêu đề / từ khóa.'); return; }
         this.disabled = true;
         try {
-            const d = await postAction({action: 'add_ideas', topics: text});
+            const res = await fetch('../ajax/post-write.php', {method: 'POST', body: params, credentials: 'same-origin', cache: 'no-store'});
+            const data = await res.json();
+            if (!res.ok || !data.success) throw new Error(data.message || 'Lỗi thêm ý tưởng.');
             location.reload();
         } catch (e) { alert(e.message); this.disabled = false; }
     });

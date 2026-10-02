@@ -41,10 +41,15 @@ $cfg_vision_on = (string) get_setting('ai_vision_enabled', '1') === '1';
 function ai_model_options(array $list, int $selected, bool $preferVision = false): string {
     $html = '<option value="0">— Không chọn —</option>';
     foreach ($list as $m) {
-        $badge = $preferVision && (int) $m['can_vision'] === 1 ? ' [vision]' : '';
+        $canVision = (int) $m['can_vision'] === 1;
+        $badge = $preferVision && $canVision ? ' [vision]' : '';
+        // Với tính năng vision: khóa model không có can_vision để tránh chọn nhầm —
+        // llm_resolve_feature sẽ loại những model này và báo "Chưa gắn model".
+        $disabled = $preferVision && !$canVision ? ' disabled' : '';
+        $note = $preferVision && !$canVision ? ' (không đọc ảnh)' : '';
         $sel = ((int) $m['id'] === $selected) ? ' selected' : '';
-        $html .= '<option value="' . (int) $m['id'] . '"' . $sel . '>'
-            . e($m['label'] ?: $m['model_name']) . ' (' . e($m['provider_name'] ?? '?') . ')' . $badge . '</option>';
+        $html .= '<option value="' . (int) $m['id'] . '"' . $sel . $disabled . '>'
+            . e($m['label'] ?: $m['model_name']) . ' (' . e($m['provider_name'] ?? '?') . ')' . $badge . $note . '</option>';
     }
     return $html;
 }

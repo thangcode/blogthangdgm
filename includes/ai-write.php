@@ -19,6 +19,7 @@ if (!function_exists('ai_write_ensure_schema')) {
                 id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
                 owner_id BIGINT UNSIGNED NOT NULL,
                 idea VARCHAR(500) NOT NULL,
+                brief TEXT DEFAULT NULL,
                 status VARCHAR(20) NOT NULL DEFAULT 'pending',
                 job_id BIGINT UNSIGNED DEFAULT NULL,
                 post_id BIGINT UNSIGNED DEFAULT NULL,
@@ -29,6 +30,12 @@ if (!function_exists('ai_write_ensure_schema')) {
                 KEY idx_aiw_owner_status (owner_id, status),
                 KEY idx_aiw_post (post_id)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+            // Nâng cấp bảng đã tồn tại: thêm cột brief nếu thiếu.
+            $colCheck = $pdo->prepare('SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?');
+            $colCheck->execute(['ai_write_ideas', 'brief']);
+            if (!(int) $colCheck->fetchColumn()) {
+                $pdo->exec('ALTER TABLE ai_write_ideas ADD COLUMN brief TEXT DEFAULT NULL AFTER idea');
+            }
             $done = true;
         } catch (Throwable $e) {
             $done = false;
@@ -76,6 +83,16 @@ if (!function_exists('ai_write_prepare_next')) {
     {
         if (!empty($cp['want_thumb'])) return 'write_thumb';
         return ai_write_next_image_stage($cp, 0);
+    }
+}
+
+if (!function_exists('ai_write_gen_topic')) {
+    /** Chủ đề đưa vào prompt: tiêu đề + mô tả/yêu cầu thêm (nếu idea có brief). */
+    function ai_write_gen_topic(array $cp): string
+    {
+        $topic = (string) ($cp['topic'] ?? $cp['title'] ?? '');
+        $brief = trim((string) ($cp['brief'] ?? ''));
+        return $brief !== '' ? $topic . "\n\nMÔ TẢ / YÊU CẦU THÊM CHO BÀI VIẾT: " . $brief : $topic;
     }
 }
 
@@ -217,6 +234,7 @@ if (!function_exists('ai_write_prepare')) {
             throw new AiJobException('invalid_input', 'A topic or title is required.');
         }
         $topic = mb_substr($topic, 0, 500, 'UTF-8');
+        $brief = mb_substr(trim(strip_tags((string) ($payload['brief'] ?? ''))), 0, 2000, 'UTF-8');
         $targetWords = max(400, min(3000, (int) ($payload['target_words'] ?? 1200)));
         $imageCount = max(0, min(3, (int) ($payload['image_count'] ?? 0)));
         $withThumb = !empty($payload['with_thumb']);
@@ -226,7 +244,10 @@ if (!function_exists('ai_write_prepare')) {
         $author = mb_substr(trim((string) ($payload['author_name'] ?? 'Admin')), 0, 255, 'UTF-8');
         if ($author === '') $author = 'Admin';
         $title = mb_substr($topic, 0, 255, 'UTF-8');
-        $token = hash('sha256', 'ai-write-job:' . (string) $job['id']);
+        // Token theo idea_id để retry/re-enqueue cùng ý tưởng tái dùng đúng draft,
+        // không chồng thêm bài nháp rỗng. Job không gắn idea vẫn theo job id.
+        $ideaId = (int) ($payload['idea_id'] ?? 0);
+        $token = hash('sha256', $ideaId > 0 ? 'ai-write-idea:' . $ideaId : 'ai-write-job:' . (string) $job['id']);
         $twoPass = $targetWords >= 1500;
 
         ai_job_transaction($job, static function (PDO $pdo) use (&$job, $payload, $topic, $title, $token, $targetWords, $imageCount, $withThumb, $statusTarget, $categoryId, $author, $twoPass): void {
@@ -272,7 +293,7 @@ if (!function_exists('ai_write_prepare')) {
 
             $cp = [
                 'entity_kind' => 'post', 'row' => $row, 'title' => (string) ($row['title'] ?? $title),
-                'topic' => $topic, 'target_words' => $targetWords, 'image_count' => $imageCount,
+                'topic' => $topic, 'brief' => $brief, 'target_words' => $targetWords, 'image_count' => $imageCount,
                 'want_thumb' => $withThumb, 'status_target' => $statusTarget,
                 'category_id' => $categoryId, 'author_name' => $author, 'two_pass' => $twoPass,
                 'import_token' => $token, 'save' => true, 'persisted' => true, 'dirty' => true,
@@ -280,7 +301,6 @@ if (!function_exists('ai_write_prepare')) {
                 'tags_snapshot' => ai_runner_post_tags_snapshot($pdo, $id),
                 'images' => [], 'warnings' => [],
             ];
-            $ideaId = (int) ($payload['idea_id'] ?? 0);
             if ($ideaId > 0) {
                 ai_write_idea_touch($pdo, $ideaId, [
                     'status' => 'running', 'job_id' => (int) $job['id'], 'post_id' => $id,
@@ -440,7 +460,7 @@ if (!function_exists('ai_write_article')) {
             ai_job_checkpoint($job, $cp, 'seo', ai_runner_result($job, $cp));
             return;
         }
-        $res = ai_generate_topic_article((string) ($cp['topic'] ?? $cp['title']), (int) ($cp['target_words'] ?? 1200), ai_runner_llm_options($deadline));
+        $res = ai_generate_topic_article(ai_write_gen_topic($cp), (int) ($cp['target_words'] ?? 1200), ai_runner_llm_options($deadline));
         if (empty($res['ok'])) throw ai_runner_error($res);
         if (trim((string) ($res['title'] ?? '')) !== '') $cp['title'] = (string) $res['title'];
         $cp['description'] = (string) ($res['description'] ?? '');
@@ -461,7 +481,7 @@ if (!function_exists('ai_write_article_b')) {
             ai_job_checkpoint($job, $cp, 'write_article');
             return;
         }
-        $res = ai_continue_topic_article((string) ($cp['topic'] ?? ''), (string) ($cp['title'] ?? ''), $partA, (int) ($cp['target_words'] ?? 1500), ai_runner_llm_options($deadline));
+        $res = ai_continue_topic_article(ai_write_gen_topic($cp), (string) ($cp['title'] ?? ''), $partA, (int) ($cp['target_words'] ?? 1500), ai_runner_llm_options($deadline));
         if (empty($res['ok'])) throw ai_runner_error($res);
         $cp['content'] = rtrim($partA) . "\n" . (string) $res['content'];
         $cp['model'] = (string) ($res['model'] ?? $cp['model'] ?? '');

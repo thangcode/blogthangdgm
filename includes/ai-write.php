@@ -345,7 +345,14 @@ if (!function_exists('ai_write_thumbnail')) {
             ai_job_checkpoint($job, $cp, $next);
             return;
         }
-        $prompt = 'Ảnh thumbnail đại diện cho bài blog, phong cách minh họa hiện đại, sạch, chuyên nghiệp, màu sắc hài hòa, TUYỆT ĐỐI không có chữ/text/watermark/logo trong ảnh. Chủ đề: "' . (string) ($cp['topic'] ?? $cp['title']) . '"';
+        $topicT = (string) ($cp['topic'] ?? $cp['title']);
+        $titleT = (string) ($cp['title'] ?? $topicT);
+        $prompt = 'Poster bìa (key visual / thumbnail) cho bài blog, phong cách editorial hiện đại, sinh động, màu sắc rực rỡ hài hòa, '
+            . 'bố cục có điểm nhấn mạnh, chiều sâu, ánh sáng ấn tượng, chất lượng marketing 4k. '
+            . 'Chủ đề bài viết: "' . $topicT . '". '
+            . 'IN CHỮ TIẾNG VIỆT rõ ràng, ĐÚNG CHÍNH TẢ CÓ DẤU, typography hiện đại đẹp mắt dễ đọc: '
+            . 'tiêu đề lớn là điểm nhấn chính: "' . $titleT . '". '
+            . 'TUYỆT ĐỐI: không watermark, không logo thương hiệu, không chữ vô nghĩa, không sai chính tả.';
         try {
             $thumbnail = ai_write_generate_image((int) $job['id'], 0, $prompt, (string) $cp['title'], $deadline);
         } catch (AiJobException $e) {
@@ -426,12 +433,16 @@ if (!function_exists('ai_write_image_step')) {
             return;
         }
         $angles = [
-            1 => 'khái niệm tổng quan, bối cảnh sử dụng',
-            2 => 'quy trình hoặc các bước thực hiện',
-            3 => 'kết quả, lợi ích thực tế đạt được',
+            1 => ['khái niệm tổng quan, bối cảnh sử dụng', 'Tổng quan'],
+            2 => ['quy trình hoặc các bước thực hiện', 'Quy trình'],
+            3 => ['kết quả, lợi ích thực tế đạt được', 'Kết quả'],
         ];
-        $angle = $angles[$index] ?? $angles[1];
-        $prompt = 'Ảnh minh họa trong bài blog, phong cách hiện đại sạch, chuyên nghiệp, không có chữ/text/watermark. Chủ đề bài viết: "' . (string) ($cp['topic'] ?? $cp['title']) . '" — khía cạnh minh họa: ' . $angle . '.';
+        [$angle, $caption] = $angles[$index] ?? $angles[1];
+        $prompt = 'Ảnh poster minh họa trong bài blog, phong cách editorial hiện đại, sinh động, giàu chi tiết, '
+            . 'màu sắc hài hòa, bố cục đẹp, ánh sáng ấn tượng, chất lượng 4k. '
+            . 'Chủ đề bài viết: "' . (string) ($cp['topic'] ?? $cp['title']) . '" — khía cạnh minh họa: ' . $angle . '. '
+            . 'Có thể IN CHỮ TIẾNG VIỆT ngắn gọn, ĐÚNG CHÍNH TẢ CÓ DẤU (nhãn/caption nhỏ hoặc vài keyword): ví dụ "' . $caption . '". '
+            . 'TUYỆT ĐỐI: không watermark, không logo thương hiệu, không chữ vô nghĩa, không sai chính tả.';
         try {
             $rel = ai_write_generate_image((int) $job['id'], $index, $prompt, (string) $cp['title'], $deadline);
         } catch (AiJobException $e) {

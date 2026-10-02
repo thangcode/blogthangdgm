@@ -955,7 +955,11 @@ $_seo_ai_enabled = function_exists('llm_feature_available') && llm_feature_avail
         }
 
         AIJobs.run(AI_SEO_URL, fd, { onProgress: p => {
-            if (btn) btn.textContent = AIJobs.progressText(p);
+            if (btn) {
+                const spin = document.createElement('span');
+                spin.className = 'spinner-border spinner-border-sm me-1';
+                btn.replaceChildren(spin, document.createTextNode(AIJobs.progressText(p)));
+            }
         } })
             .then(data => {
                 const titleEl = document.getElementById('metaTitle');

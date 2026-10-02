@@ -17,7 +17,7 @@
         if (batch) url.searchParams.set('batch_id', batch);
         return url.href;
     }
-    function notice(message, batch, warning) {
+    function notice(message, batch, warning, active) {
         let box = document.getElementById('aiJobsNotice');
         if (!box) {
             box = document.createElement('div');
@@ -26,7 +26,13 @@
             (document.querySelector('main') || document.querySelector('.container-fluid') || document.body).prepend(box);
         }
         box.className = 'alert ' + (warning ? 'alert-warning' : 'alert-info');
-        box.replaceChildren(document.createTextNode(message + ' '));
+        if (active) {
+            const spin = document.createElement('span');
+            spin.className = 'spinner-border spinner-border-sm me-2 align-text-bottom';
+            box.replaceChildren(spin, document.createTextNode(message + ' '));
+        } else {
+            box.replaceChildren(document.createTextNode(message + ' '));
+        }
         const link = document.createElement('a');
         link.href = recoveryUrl(batch);
         link.className = 'alert-link';
@@ -71,7 +77,7 @@
                 if (!data.queued || !data.batch_id || !Array.isArray(data.job_ids) || !data.job_ids.length) {
                     throw new Error('Máy chủ chưa trả về lô tác vụ hợp lệ. Kiểm tra hàng đợi trước khi gửi lại.');
                 }
-                notice('Đã xếp hàng ' + data.job_ids.length + ' tác vụ. Đóng trang không hủy tác vụ.', data.batch_id, false);
+                notice('Đã xếp hàng ' + data.job_ids.length + ' tác vụ. Đóng trang không hủy tác vụ.', data.batch_id, false, true);
                 return data;
             } catch (error) {
                 if (error.transient && attempt < 2) { await sleep(1000 * (attempt + 1)); continue; }
@@ -145,7 +151,7 @@
                     cancelled: jobs.filter(job => job.status === 'cancelled').length,
                     warning: workerWarning(data.worker)
                 };
-                notice(progressText(progress), accepted.batch_id, !!progress.warning || !!progress.failed);
+                notice(progressText(progress), accepted.batch_id, !!progress.warning || !!progress.failed, progress.done < progress.total);
                 if (options.onProgress) options.onProgress(progress);
                 if (progress.total > 0 && progress.done === progress.total) return jobs;
             } catch (error) {

@@ -72,9 +72,12 @@ $sb_html = '';
 if ($sb_cfg['enabled']) {
     $sb_html  = sidebar_render($pdo);
     // Banner quảng cáo cột bên bài viết (giống widget "Shop Khóa Học" trên WordPress) — đặt trên cùng.
-    if (function_exists('render_ad_slot')) {
-        $sb_html = render_ad_slot($pdo, 'post_sidebar') . $sb_html;
-    }
+    $sb_banner = function_exists('render_ad_slot') ? render_ad_slot($pdo, 'post_sidebar') : '';
+    // Khối link cấu hình (settings post_links_*) ngay dưới banner sidebar.
+    ob_start();
+    require __DIR__ . '/includes/blocks/post_links.php';
+    $plinks_html = (string) ob_get_clean();
+    $sb_html = $sb_banner . $plinks_html . $sb_html;
 }
 $has_sidebar = $sb_cfg['enabled'] && trim($sb_html) !== '';
 $sb_left = $has_sidebar && $sb_cfg['position'] === 'left';

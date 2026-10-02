@@ -85,10 +85,17 @@ try { $faqs = $pdo->query("SELECT * FROM faqs WHERE status=1 ORDER BY sort_order
 $sb_cfg  = sidebar_resolve($sb_mode, $sb_pos);
 $sb_html = $sb_cfg['enabled'] ? sidebar_render($pdo) : '';
 // Banner quảng cáo cột bên trang chủ (slot home_sidebar; nếu trống dùng tạm banner post_sidebar).
-if ($sb_cfg['enabled'] && function_exists('render_ad_slot')) {
-    $sb_ad = render_ad_slot($pdo, 'home_sidebar');
-    if (trim($sb_ad) === '') $sb_ad = render_ad_slot($pdo, 'post_sidebar');
-    $sb_html = $sb_ad . $sb_html;
+if ($sb_cfg['enabled']) {
+    $sb_ad = '';
+    if (function_exists('render_ad_slot')) {
+        $sb_ad = render_ad_slot($pdo, 'home_sidebar');
+        if (trim($sb_ad) === '') $sb_ad = render_ad_slot($pdo, 'post_sidebar');
+    }
+    // Khối link cấu hình (settings post_links_*) ngay dưới banner sidebar.
+    ob_start();
+    require __DIR__ . '/includes/blocks/post_links.php';
+    $plinks_html = (string) ob_get_clean();
+    $sb_html = $sb_ad . $plinks_html . $sb_html;
 }
 $has_sidebar = $sb_cfg['enabled'] && trim($sb_html) !== '';
 $sb_left = $has_sidebar && $sb_cfg['position'] === 'left';

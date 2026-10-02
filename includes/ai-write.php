@@ -432,6 +432,28 @@ if (!function_exists('ai_write_prepare')) {
     }
 }
 
+if (!function_exists('ai_write_image_context')) {
+    /**
+     * Bối cảnh cho prompt tạo ảnh: mô tả ý tưởng + vài dòng dữ kiện research đầu.
+     * Giúp model ảnh khắc họa ĐÚNG chủ thể cụ thể thay vì ảnh stock chung chung.
+     */
+    function ai_write_image_context(array $cp): string
+    {
+        $parts = [];
+        $brief = trim((string) ($cp['brief'] ?? ''));
+        if ($brief !== '') {
+            $parts[] = $brief;
+        }
+        $research = trim((string) ($cp['research'] ?? ''));
+        if ($research !== '') {
+            $lines = preg_split('/\r\n|\r|\n/', $research);
+            $parts[] = implode(' ', array_slice($lines, 0, 3));
+        }
+        $ctx = trim(implode(' ', $parts));
+        return mb_substr($ctx, 0, 700, 'UTF-8');
+    }
+}
+
 if (!function_exists('ai_write_thumbnail')) {
     /**
      * Stage 'write_thumb': tạo thumbnail bằng image model + nén WebP + ghi posts.thumbnail.
@@ -460,9 +482,11 @@ if (!function_exists('ai_write_thumbnail')) {
         }
         $topicT = (string) ($cp['topic'] ?? $cp['title']);
         $titleT = (string) ($cp['title'] ?? $topicT);
+        $ctxT = ai_write_image_context($cp);
         $prompt = 'Poster bìa (key visual / thumbnail) cho bài blog, phong cách editorial hiện đại, sinh động, màu sắc rực rỡ hài hòa, '
             . 'bố cục có điểm nhấn mạnh, chiều sâu, ánh sáng ấn tượng, chất lượng marketing 4k. '
             . 'Chủ đề bài viết: "' . $topicT . '". '
+            . ($ctxT !== '' ? 'Bối cảnh cụ thể của bài (BẮT BUỘC bám sát để khắc họa đúng chủ thể/sản phẩm/công nghệ trong bài — tuyệt đối không vẽ cảnh chung chung không liên quan): ' . $ctxT . '. ' : '')
             . 'IN CHỮ TIẾNG VIỆT rõ ràng, ĐÚNG CHÍNH TẢ CÓ DẤU, typography hiện đại đẹp mắt dễ đọc: '
             . 'tiêu đề lớn là điểm nhấn chính: "' . $titleT . '". '
             . 'TUYỆT ĐỐI: không watermark, không logo thương hiệu, không chữ vô nghĩa, không sai chính tả.';
@@ -546,14 +570,24 @@ if (!function_exists('ai_write_image_step')) {
             return;
         }
         $angles = [
-            1 => ['khái niệm tổng quan, bối cảnh sử dụng', 'Tổng quan'],
-            2 => ['quy trình hoặc các bước thực hiện', 'Quy trình'],
-            3 => ['kết quả, lợi ích thực tế đạt được', 'Kết quả'],
+            1 => ['khắc họa trực quan chủ thể/khái niệm chính của bài — nhìn ảnh là nhận ra ngay chủ đề', 'Tổng quan'],
+            2 => ['minh họa các điểm/số liệu/thông số nổi bật CỤ THỂ của chủ đề (so sánh, quy trình riêng của chủ đề này)', 'Điểm nổi bật'],
+            3 => ['minh họa ứng dụng/kết quả thực tế của chính chủ đề trong đời sống hoặc công việc', 'Thực tế áp dụng'],
         ];
         [$angle, $caption] = $angles[$index] ?? $angles[1];
-        $prompt = 'Ảnh poster minh họa trong bài blog, phong cách editorial hiện đại, sinh động, giàu chi tiết, '
+        // Caption ảnh 1 lấy từ tiêu đề rút gọn để bám chủ đề thay vì nhãn chung chung.
+        if ($index === 1) {
+            $shortTitle = trim((string) ($cp['title'] ?? $cp['topic'] ?? ''));
+            if (mb_strlen($shortTitle, 'UTF-8') > 48) {
+                $shortTitle = rtrim(mb_substr($shortTitle, 0, 48, 'UTF-8')) . '…';
+            }
+            if ($shortTitle !== '') $caption = $shortTitle;
+        }
+        $ctx = ai_write_image_context($cp);
+        $prompt = 'Ảnh poster minh họa trong bài blog, phong cách editorial/infographic hiện đại, sinh động, giàu chi tiết, '
             . 'màu sắc hài hòa, bố cục đẹp, ánh sáng ấn tượng, chất lượng 4k. '
             . 'Chủ đề bài viết: "' . (string) ($cp['topic'] ?? $cp['title']) . '" — khía cạnh minh họa: ' . $angle . '. '
+            . ($ctx !== '' ? 'Bối cảnh cụ thể của bài (BẮT BUỘC bám sát — khắc họa đúng tên sản phẩm/công nghệ/sự kiện/thực thể trong bài; TUYỆT ĐỐI không vẽ cảnh stock chung chung không liên quan): ' . $ctx . '. ' : '')
             . 'Có thể IN CHỮ TIẾNG VIỆT ngắn gọn, ĐÚNG CHÍNH TẢ CÓ DẤU (nhãn/caption nhỏ hoặc vài keyword): ví dụ "' . $caption . '". '
             . 'TUYỆT ĐỐI: không watermark, không logo thương hiệu, không chữ vô nghĩa, không sai chính tả.';
         try {

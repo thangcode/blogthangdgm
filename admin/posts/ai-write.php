@@ -32,7 +32,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'config'
     $save('ai_write_default_thumb', !empty($_POST['ai_write_default_thumb']) ? '1' : '0');
     $save('ai_write_default_status', $status);
     $save('ai_write_default_category', max(0, (int) ($_POST['ai_write_default_category'] ?? 0)));
-    header('Location: ai-write.php?saved=1');
+    $_SESSION['ai_write_saved'] = '1';
+    header('Location: ai-write.php');
     exit;
 }
 
@@ -117,7 +118,7 @@ $jobBadges = [
         </div>
     </div>
 
-    <?php if (isset($_GET['saved'])): ?>
+    <?php if (!empty($_SESSION['ai_write_saved'])): unset($_SESSION['ai_write_saved']); ?>
         <div class="alert alert-success rounded-4"><i class="bi bi-check-circle me-2"></i>Đã lưu cấu hình viết bài.</div>
     <?php endif; ?>
     <?php if (!$queueReady): ?>
@@ -331,7 +332,8 @@ $jobBadges = [
         <div id="aiProgressLog" style="max-height:240px;overflow:auto;font-size:.82rem;"></div>
       </div>
       <div class="modal-footer">
-        <button type="button" class="btn btn-light" id="aiProgressClose" data-bs-dismiss="modal" disabled>Đóng</button>
+        <span class="small text-muted me-auto">Có thể đóng — tác vụ tiếp tục chạy nền.</span>
+        <button type="button" class="btn btn-light" id="aiProgressClose" data-bs-dismiss="modal">Đóng</button>
       </div>
     </div>
   </div>
@@ -389,14 +391,17 @@ document.addEventListener('DOMContentLoaded', function () {
         } catch (e) { alert(e.message); this.disabled = false; }
     });
 
+    let jobSubmitted = false;
+    pm.addEventListener('hidden.bs.modal', () => { if (jobSubmitted) location.reload(); });
+
     async function runWrite(ideaIds, label) {
         if (!ideaIds.length) { alert('Vui lòng chọn ít nhất 1 ý tưởng chưa viết.'); return; }
         document.getElementById('aiProgressTitle').textContent = label + ' (' + ideaIds.length + ' bài)';
         logEl.innerHTML = ''; setBar(0, ideaIds.length); statusEl.textContent = 'Đang xếp hàng...';
-        closeBtn.disabled = true;
         if (typeof bootstrap !== 'undefined' && pm) bootstrap.Modal.getOrCreateInstance(pm).show();
         try {
             const accepted = await AIJobs.send('../ajax/post-write.php', new URLSearchParams({action: 'write', idea_ids: ideaIds.join(',')}));
+            jobSubmitted = true;
             const jobs = await AIJobs.waitBatch(accepted, { onProgress: p => {
                 statusEl.textContent = AIJobs.progressText(p);
                 setBar(p.done || 0, p.total || ideaIds.length);
@@ -414,7 +419,6 @@ document.addEventListener('DOMContentLoaded', function () {
         } catch (e) {
             statusEl.textContent = e.message || 'Không đọc được trạng thái hàng đợi.';
         }
-        closeBtn.disabled = false;
     }
 
     document.getElementById('btnWriteSelected').addEventListener('click', () => runWrite(selectedIds(), 'Viết các bài đã chọn'));

@@ -172,6 +172,8 @@ require_once 'includes/header.php';
                         <?php echo $post_content; ?>
                     </div>
 
+                    <?php require __DIR__ . '/includes/blocks/post_links.php'; ?>
+
                     <?php require __DIR__ . '/includes/blocks/post_cta.php'; ?>
 
                     <?php if ($post_below_html !== ''): ?>

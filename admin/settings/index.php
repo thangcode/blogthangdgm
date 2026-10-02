@@ -659,6 +659,24 @@ require_once '../includes/header.php';
                             </div>
                         </div>
 
+                        <div class="card border mb-4">
+                            <div class="card-header bg-light d-flex align-items-center gap-2 py-2">
+                                <i class="bi bi-box-arrow-up-right text-success"></i>
+                                <strong>Liên kết cuối bài viết (Post Links)</strong>
+                            </div>
+                            <div class="card-body p-3">
+                                <label class="form-label small fw-semibold" for="post_links_title">Tiêu đề khối</label>
+                                <input type="text" class="form-control mb-2" name="settings[post_links_title]"
+                                    id="post_links_title" maxlength="120" placeholder="Tham khảo thêm"
+                                    value="<?php echo e($settings['post_links_title'] ?? ''); ?>">
+                                <textarea class="form-control font-monospace" name="settings[post_links_items]"
+                                    id="post_links_items" rows="4" placeholder="Ví dụ:&#10;Dịch vụ quảng cáo|https://services.thang-dgm.com&#10;Công cụ AI|https://tool.thangdgm.io.vn"><?php echo e($settings['post_links_items'] ?? ''); ?></textarea>
+                                <div class="form-text mt-2">
+                                    <i class="bi bi-info-circle me-1"></i> Nhập mỗi liên kết trên 1 dòng: <code>Tên hiển thị|Đường dẫn (URL)</code>. Khối link hiển thị <strong>ở cuối nội dung mọi bài viết</strong>, phía trên khối CTA. Bỏ trống = không hiện.
+                                </div>
+                            </div>
+                        </div>
+
                         <?php
                         // Show auto-loaded categories preview
                         $preview_cats = get_footer_categories();

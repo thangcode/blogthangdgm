@@ -204,6 +204,7 @@ $jobBadges = [
                     <div class="d-flex gap-2 mt-2">
                         <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill px-3" id="btnAddRow"><i class="bi bi-plus-lg me-1"></i>Thêm dòng</button>
                         <button type="button" class="btn btn-sm btn-success rounded-pill px-4" id="btnAddIdeas"><i class="bi bi-check-lg me-1"></i>Thêm vào danh sách</button>
+                        <button type="button" class="btn btn-sm btn-light rounded-pill px-3 d-none" id="btnCancelEdit">Hủy sửa</button>
                     </div>
                     <div class="form-text">Tối đa 100 ý tưởng/lần. Mô tả giúp AI viết sát ý hơn (góc nhìn, đối tượng, yêu cầu riêng).</div>
                 </div>
@@ -255,10 +256,13 @@ $jobBadges = [
                                             <?php else: ?><span class="text-muted small">—</span><?php endif; ?>
                                         </td>
                                         <td><small class="text-muted"><?php echo e(date('d/m H:i', strtotime((string) $idea['created_at']))); ?></small></td>
-                                        <td class="pe-4 text-end">
+                                        <td class="pe-4 text-end text-nowrap">
                                             <?php if ($writable): ?>
                                                 <button type="button" class="btn btn-sm btn-outline-success rounded-pill px-3 btn-idea-write" data-id="<?php echo (int) $idea['id']; ?>" title="Viết bài này"><i class="bi bi-magic me-1"></i><?php echo $stt === 'failed' ? 'Viết lại' : 'Viết'; ?></button>
+                                            <?php elseif ($stt === 'done'): ?>
+                                                <button type="button" class="btn btn-sm btn-outline-success rounded-pill px-3 btn-idea-write" data-id="<?php echo (int) $idea['id']; ?>" data-force="1" title="Viết lại — ghi đè bài hiện có"><i class="bi bi-arrow-repeat me-1"></i>Viết lại</button>
                                             <?php endif; ?>
+                                            <button type="button" class="btn btn-sm btn-light border rounded-pill px-2 btn-idea-edit" data-id="<?php echo (int) $idea['id']; ?>" data-idea="<?php echo e($idea['idea']); ?>" data-brief="<?php echo e((string) ($idea['brief'] ?? '')); ?>" title="Sửa ý tưởng" <?php echo $stt === 'running' ? 'disabled' : ''; ?>><i class="bi bi-pencil text-primary"></i></button>
                                             <button type="button" class="btn btn-sm btn-light border rounded-pill px-2 btn-idea-del" data-id="<?php echo (int) $idea['id']; ?>" title="Xóa ý tưởng" <?php echo $stt === 'running' ? 'disabled' : ''; ?>><i class="bi bi-trash text-danger"></i></button>
                                         </td>
                                     </tr>
@@ -402,7 +406,45 @@ document.addEventListener('DOMContentLoaded', function () {
     }
     document.getElementById('btnAddRow').addEventListener('click', addIdeaRow);
 
-    document.getElementById('btnAddIdeas').addEventListener('click', async function () {
+    const btnAdd = document.getElementById('btnAddIdeas');
+    const btnCancelEdit = document.getElementById('btnCancelEdit');
+    let editIdeaId = 0;
+
+    function exitEditMode() {
+        editIdeaId = 0;
+        btnAdd.innerHTML = '<i class="bi bi-check-lg me-1"></i>Thêm vào danh sách';
+        btnCancelEdit.classList.add('d-none');
+        ideaRows.querySelectorAll('.idea-row').forEach((row, i) => { if (i > 0) row.remove(); });
+        const first = ideaRows.querySelector('.idea-row');
+        first.querySelector('.idea-title').value = '';
+        first.querySelector('.idea-desc').value = '';
+    }
+    btnCancelEdit.addEventListener('click', exitEditMode);
+
+    document.querySelectorAll('.btn-idea-edit').forEach(btn => btn.addEventListener('click', () => {
+        exitEditMode();
+        editIdeaId = parseInt(btn.dataset.id, 10);
+        const first = ideaRows.querySelector('.idea-row');
+        first.querySelector('.idea-title').value = btn.dataset.idea || '';
+        first.querySelector('.idea-desc').value = btn.dataset.brief || '';
+        btnAdd.innerHTML = '<i class="bi bi-pencil me-1"></i>Cập nhật ý tưởng';
+        btnCancelEdit.classList.remove('d-none');
+        first.querySelector('.idea-title').focus();
+        first.scrollIntoView({behavior: 'smooth', block: 'center'});
+    }));
+
+    btnAdd.addEventListener('click', async function () {
+        if (editIdeaId) {
+            const first = ideaRows.querySelector('.idea-row');
+            const t = first.querySelector('.idea-title').value.trim();
+            if (t === '') { alert('Tiêu đề / từ khóa không được để trống.'); return; }
+            this.disabled = true;
+            try {
+                await postAction({action: 'update_idea', idea_id: editIdeaId, title: t, desc: first.querySelector('.idea-desc').value.trim()});
+                location.reload();
+            } catch (e) { alert(e.message); this.disabled = false; }
+            return;
+        }
         const params = new URLSearchParams({action: 'add_ideas', csrf_token: POST_CSRF});
         let n = 0;
         ideaRows.querySelectorAll('.idea-row').forEach(row => {
@@ -423,13 +465,13 @@ document.addEventListener('DOMContentLoaded', function () {
     let jobSubmitted = false;
     pm.addEventListener('hidden.bs.modal', () => { if (jobSubmitted) location.reload(); });
 
-    async function runWrite(ideaIds, label) {
+    async function runWrite(ideaIds, label, force) {
         if (!ideaIds.length) { alert('Vui lòng chọn ít nhất 1 ý tưởng chưa viết.'); return; }
         document.getElementById('aiProgressTitle').textContent = label + ' (' + ideaIds.length + ' bài)';
         logEl.innerHTML = ''; setBar(0, ideaIds.length); statusEl.textContent = 'Đang xếp hàng...';
         if (typeof bootstrap !== 'undefined' && pm) bootstrap.Modal.getOrCreateInstance(pm).show();
         try {
-            const accepted = await AIJobs.send('../ajax/post-write.php', new URLSearchParams({action: 'write', idea_ids: ideaIds.join(',')}));
+            const accepted = await AIJobs.send('../ajax/post-write.php', new URLSearchParams({action: 'write', idea_ids: ideaIds.join(','), force: force ? '1' : '0'}));
             jobSubmitted = true;
             const jobs = await AIJobs.waitBatch(accepted, { onProgress: p => {
                 statusEl.textContent = AIJobs.progressText(p);
@@ -451,7 +493,11 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     document.getElementById('btnWriteSelected').addEventListener('click', () => runWrite(selectedIds(), 'Viết các bài đã chọn'));
-    document.querySelectorAll('.btn-idea-write').forEach(btn => btn.addEventListener('click', () => runWrite([parseInt(btn.dataset.id, 10)], 'Viết bài #' + btn.dataset.id)));
+    document.querySelectorAll('.btn-idea-write').forEach(btn => btn.addEventListener('click', () => {
+        const force = btn.dataset.force === '1';
+        if (force && !confirm('Viết lại sẽ GHI ĐÈ nội dung bài đã có của ý tưởng #' + btn.dataset.id + '. Tiếp tục?')) return;
+        runWrite([parseInt(btn.dataset.id, 10)], 'Viết bài #' + btn.dataset.id, force);
+    }));
     document.querySelectorAll('.btn-idea-del').forEach(btn => btn.addEventListener('click', async () => {
         if (!confirm('Xóa ý tưởng #' + btn.dataset.id + '?')) return;
         btn.disabled = true;

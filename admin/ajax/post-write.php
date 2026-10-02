@@ -78,6 +78,22 @@ if ($action === 'delete_ideas') {
     ai_write_json(['success' => true, 'deleted' => $st->rowCount()]);
 }
 
+// ---- Sửa ý tưởng (tiêu đề + mô tả); không sửa khi job đang chạy ----
+if ($action === 'update_idea') {
+    $id = (int) ($_POST['idea_id'] ?? $_POST['id'] ?? 0);
+    $idea = mb_substr(trim((string) ($_POST['title'] ?? '')), 0, 500, 'UTF-8');
+    $brief = mb_substr(trim((string) ($_POST['desc'] ?? '')), 0, 2000, 'UTF-8');
+    if ($id <= 0 || $idea === '') ai_endpoint_error('invalid_input');
+    $st = $pdo->prepare('SELECT status FROM ai_write_ideas WHERE owner_id = ? AND id = ? LIMIT 1');
+    $st->execute([$ownerId, $id]);
+    $row = $st->fetch(PDO::FETCH_ASSOC);
+    if (!$row) ai_endpoint_error('invalid_input');
+    if ((string) $row['status'] === 'running') ai_endpoint_error('conflict', 409);
+    $pdo->prepare('UPDATE ai_write_ideas SET idea = ?, brief = ?, updated_at = NOW() WHERE id = ?')
+        ->execute([$idea, $brief !== '' ? $brief : null, $id]);
+    ai_write_json(['success' => true]);
+}
+
 // ---- Xếp hàng viết ----
 if ($action !== 'write') ai_endpoint_error('invalid_input');
 
@@ -98,9 +114,12 @@ if (isset($_POST['idea_ids']) || isset($_POST['idea_id'])) {
     $st = $pdo->prepare("SELECT id, idea, brief, status FROM ai_write_ideas WHERE owner_id = ? AND id IN ($ph)");
     $st->execute(array_merge([$ownerId], $ids));
     $ideas = $st->fetchAll(PDO::FETCH_ASSOC);
+    // force=1 (nút "Viết lại" từng dòng): cho phép viết lại ý tưởng đã done —
+    // token theo idea_id nên job mới ghi đè đúng bài cũ, không tạo bài trùng.
+    $force = !empty($_POST['force']);
     foreach ($ideas as $row) {
-        // Chỉ xếp hàng ý tưởng chưa viết / đã lỗi; bỏ qua đang chạy hoặc đã xong.
-        if (in_array($row['status'], ['pending', 'failed'], true)) {
+        // Chỉ xếp hàng ý tưởng chưa viết / đã lỗi; 'done' chỉ khi force; bỏ qua đang chạy.
+        if (in_array($row['status'], ['pending', 'failed'], true) || ($force && $row['status'] === 'done')) {
             $targets[] = [(int) $row['id'], (string) $row['idea'], (string) ($row['brief'] ?? '')];
         }
     }

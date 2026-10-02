@@ -61,6 +61,8 @@ function ai_entity_snapshot(array $row, string $kind): string
 function ai_runner_stage_min_seconds(string $stage): float
 {
     if (in_array($stage, ['article', 'product_generate'], true)) return 20.0;
+    if (in_array($stage, ['write_thumb', 'write_article', 'write_article_b'], true)) return 60.0;
+    if (strpos($stage, 'write_img_') === 0) return 60.0;
     if ($stage === 'seo') return 15.0;
     if (in_array($stage, ['thumbnail', 'import_oembed', 'import_metadata'], true)) return 8.0;
     return 2.0;
@@ -557,6 +559,10 @@ function ai_run_job(array &$job, float $deadline): void
     $stage = (string) ($job['stage'] ?? 'prepare');
     if ($kind === 'import' && in_array($stage, ['prepare', 'import_oembed', 'import_metadata', 'import_insert'], true)) {
         ai_run_import_stage($job, $deadline);
+        return;
+    }
+    if ($kind === 'write') {
+        ai_run_write_stage($job, $deadline);
         return;
     }
     switch ($stage) {

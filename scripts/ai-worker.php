@@ -8,6 +8,7 @@ require_once __DIR__ . '/../includes/blog.php';
 require_once __DIR__ . '/../includes/page-cache.php';
 require_once __DIR__ . '/../includes/ai-jobs.php';
 require_once __DIR__ . '/../includes/ai-import.php';
+require_once __DIR__ . '/../includes/ai-write.php';
 require_once __DIR__ . '/../includes/ai-job-runner.php';
 
 $options = getopt('', ['max-jobs::', 'max-seconds::', 'once', 'check']);

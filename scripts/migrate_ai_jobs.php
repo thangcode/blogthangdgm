@@ -100,6 +100,20 @@ try {
             $pdo->exec("ALTER TABLE `$table` ENGINE=InnoDB");
         }
     }
+    $pdo->exec("CREATE TABLE IF NOT EXISTS ai_write_ideas (
+        id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+        owner_id BIGINT UNSIGNED NOT NULL,
+        idea VARCHAR(500) NOT NULL,
+        status VARCHAR(20) NOT NULL DEFAULT 'pending',
+        job_id BIGINT UNSIGNED DEFAULT NULL,
+        post_id BIGINT UNSIGNED DEFAULT NULL,
+        message VARCHAR(255) DEFAULT NULL,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        KEY idx_aiw_owner_status (owner_id, status),
+        KEY idx_aiw_post (post_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
     foreach (['posts' => ['ai_import_token' => 'CHAR(64) DEFAULT NULL'],
               'pages' => ['focus_keyword' => 'VARCHAR(255) DEFAULT NULL'],
               'categories' => ['content' => 'LONGTEXT DEFAULT NULL', 'focus_keyword' => 'VARCHAR(255) DEFAULT NULL']] as $table => $columns) {

@@ -493,6 +493,10 @@ if (!headers_sent()) {
                 class="nav-link-admin <?php echo ($current_page == 'posts') ? 'active' : ''; ?>">
                 <i class="bi bi-newspaper"></i> Bài viết
             </a>
+            <a href="<?php echo BASE_URL; ?>admin/posts/ai-write.php"
+                class="nav-link-admin <?php echo ($current_page == 'posts-ai-write') ? 'active' : ''; ?>">
+                <i class="bi bi-magic"></i> Viết bài AI
+            </a>
             <a href="<?php echo BASE_URL; ?>admin/tags/index.php"
                 class="nav-link-admin <?php echo ($current_page == 'tags') ? 'active' : ''; ?>">
                 <i class="bi bi-tag"></i> Tags

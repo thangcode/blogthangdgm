@@ -65,6 +65,7 @@ $qs = function($overrides = []) use ($q, $cat, $status) {
     <div class="d-flex justify-content-between align-items-center pt-3 pb-2 mb-3 border-bottom">
         <h1 class="h2">Quản lý Bài viết <span class="badge bg-secondary"><?php echo number_format($total); ?></span></h1>
         <div class="d-flex gap-2">
+            <a href="ai-write.php" class="btn btn-outline-primary"><i class="bi bi-magic"></i> Viết bài AI</a>
             <button type="button" class="btn btn-outline-success" data-bs-toggle="modal" data-bs-target="#importModal"><i class="bi bi-youtube"></i> Nhập ý tưởng / YouTube</button>
             <a href="add.php" class="btn btn-primary"><i class="bi bi-plus-lg"></i> Thêm mới</a>
         </div>

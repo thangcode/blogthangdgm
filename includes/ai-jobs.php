@@ -265,6 +265,9 @@ function ai_jobs_retry(PDO $pdo, int $ownerId, int $id): bool
         if ((string) $row['kind'] === 'import' && !empty($payload['save'])) {
             $active = 'import:' . $ownerId . ':' . hash('sha256', trim((string) ($payload['line'] ?? '')));
         }
+        if ((string) $row['kind'] === 'write' && !empty($payload['save'])) {
+            $active = 'write:' . $ownerId . ':' . hash('sha256', trim((string) ($payload['topic'] ?? '')));
+        }
         if ($active !== null) {
             $busy = $pdo->prepare("SELECT id FROM ai_jobs WHERE active_key=? AND id<>? LIMIT 1");
             $busy->execute([$active, $id]);

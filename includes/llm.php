@@ -1182,3 +1182,141 @@ if (!function_exists('ai_rewrite_blog_post')) {
         ];
     }
 }
+
+if (!function_exists('ai_generate_topic_article')) {
+    /**
+     * Viết MỚI một bài blog hoàn chỉnh từ tiêu đề/từ khóa (không có nguồn).
+     * - $targetWords < 1500: một lần gọi trả đủ {title, description, content}.
+     * - $targetWords >= 1500: lần 1 trả phần đầu bài (~55%), đặt needs_part_b=true;
+     *   phần còn lại được viết bởi ai_continue_topic_article() ở stage kế tiếp.
+     * @return array ['ok'=>bool,'title','description','content','model','needs_part_b','error','code','retryable']
+     */
+    function ai_generate_topic_article(string $topic, int $targetWords = 1200, array $opts = []): array
+    {
+        $topic = trim(strip_tags($topic));
+        if ($topic === '') {
+            return ['ok' => false, 'error' => 'no_topic', 'code' => 'invalid_request', 'retryable' => false, 'model' => '', 'needs_part_b' => false];
+        }
+        $targetWords = max(400, min(3000, $targetWords));
+        $twoPass = $targetWords >= 1500;
+        $partAWords = $twoPass ? (int) round($targetWords * 0.55) : $targetWords;
+
+        $system = "Bạn là biên tập viên blog kiêm chuyên gia SEO/GEO người Việt. Viết MỚI một BÀI BLOG hoàn chỉnh, hữu ích, chuẩn SEO và GEO từ tiêu đề/từ khóa được cung cấp. CHỈ trả về JSON object:\n"
+            . "{\n  \"title\": \"Tiêu đề cuối cùng chuẩn SEO, tự nhiên, 50-70 ký tự (dùng lại tiêu đề nhập nếu đã tốt)\",\n  \"description\": \"Tóm tắt 2-3 câu, chứa từ khóa chính\",\n  \"content\": \"Nội dung HTML, BẮT ĐẦU bằng thẻ <h2>\"\n}\n\n"
+            . "YÊU CẦU content:\n"
+            . "- HTML thuần (KHÔNG markdown), BẮT ĐẦU bằng <h2>, TUYỆT ĐỐI KHÔNG dùng <h1> (vì H1 tiêu đề đã render tự động).\n"
+            . "- Dài khoảng {$partAWords} từ" . ($twoPass ? " — ĐÂY LÀ PHẦN ĐẦU của một bài dài {$targetWords} từ: viết mở bài và các mục đầu tiên, DỪNG ở cuối một mục <h2> hoàn chỉnh, TUYỆT ĐỐI chưa viết mục FAQ hay kết luận" : "") . ". Mạch lạc, văn phong blog tự nhiên, không sáo rỗng.\n"
+            . "- Cấu trúc: đoạn mở bài ngắn; nhiều mục <h2> (dùng <h3> cho mục con khi cần); <p> đoạn văn; <ul><li> liệt kê; <strong> nhấn mạnh" . ($twoPass ? "." : "; đoạn kết; mục <h2>Câu hỏi thường gặp với 3-5 câu hỏi (mỗi câu là <h3> + <p> trả lời).") . "\n"
+            . "- CHUẨN SEO: suy ra từ khóa chính từ tiêu đề, đặt vào đoạn mở đầu; rải từ khóa + từ đồng nghĩa (LSI) tự nhiên trong các <h2>/<h3> và đoạn văn; không nhồi nhét.\n"
+            . "- CHUẨN GEO (tối ưu cho Google AI Overviews, ChatGPT, Perplexity): trả lời trực tiếp, rõ ràng ngay đầu mỗi mục; nêu dữ kiện cụ thể (số liệu, bước làm, ví dụ) để AI dễ trích dẫn; nêu rõ thực thể (tên công cụ, nền tảng, khái niệm).\n"
+            . "- KHÔNG bịa thông tin kiểm chứng: không tự đặt số liệu giá cả/thống kê cụ thể nếu không chắc; nêu xu hướng/khung tham khảo thay vì con số tuyệt đối khi thiếu dữ kiện.\n"
+            . ai_content_rules();
+        $user = "TIÊU ĐỀ / TỪ KHÓA BÀI VIẾT: $topic\n\nHãy viết bài blog theo đúng yêu cầu.";
+
+        $res = llm_chat([
+            ['role' => 'system', 'content' => $system],
+            ['role' => 'user', 'content' => $user],
+        ], array_replace([
+            'max_tokens' => 4000,
+            'temperature' => 0.7,
+            'response_format' => ['type' => 'json_object'],
+            'parse' => static fn(string $text): ?array => llm_parse_json_object($text),
+        ], $opts));
+
+        if (empty($res['ok'])) {
+            return [
+                'ok' => false, 'error' => $res['error'] ?? 'api_error',
+                'code' => $res['code'] ?? 'request_rejected',
+                'retryable' => !empty($res['retryable']),
+                'model' => $res['model_used'] ?? '', 'needs_part_b' => $twoPass,
+            ];
+        }
+        $parsed = is_array($res['parsed'] ?? null) ? $res['parsed'] : llm_parse_json_object((string) ($res['text'] ?? ''));
+        if (!is_array($parsed)) {
+            return [
+                'ok' => false, 'error' => llm_error('invalid_output')['error'],
+                'code' => 'invalid_output', 'retryable' => false,
+                'model' => $res['model_used'] ?? '', 'needs_part_b' => $twoPass,
+            ];
+        }
+        $content = trim((string) ($parsed['content'] ?? ''));
+        $content = preg_replace('/^```[a-z]*\s*|\s*```$/i', '', $content);
+        $content = preg_replace('#<(/?)h1(\s[^>]*)?>#i', '<$1h2$2>', (string) $content);
+        if ($content === '' || stripos((string) $content, '<h2') === false) {
+            return [
+                'ok' => false, 'error' => llm_error('invalid_output')['error'],
+                'code' => 'invalid_output', 'retryable' => true,
+                'model' => $res['model_used'] ?? '', 'needs_part_b' => $twoPass,
+            ];
+        }
+        return [
+            'ok'          => true,
+            'title'       => seo_truncate(trim((string) ($parsed['title'] ?? '')) !== '' ? (string) $parsed['title'] : $topic, 70),
+            'description' => trim((string) ($parsed['description'] ?? '')),
+            'content'     => $content,
+            'model'       => $res['model_used'] ?? '',
+            'needs_part_b' => $twoPass,
+        ];
+    }
+}
+
+if (!function_exists('ai_continue_topic_article')) {
+    /**
+     * Pass 2 cho bài dài: viết tiếp phần còn lại (mục cuối + FAQ + kết luận).
+     * @return array ['ok'=>bool,'content','model','error','code','retryable']
+     */
+    function ai_continue_topic_article(string $topic, string $title, string $partAHtml, int $targetWords, array $opts = []): array
+    {
+        $topic = trim(strip_tags($topic));
+        $partAHtml = trim($partAHtml);
+        if ($topic === '' || $partAHtml === '') {
+            return ['ok' => false, 'error' => 'no_input', 'code' => 'invalid_request', 'retryable' => false, 'model' => ''];
+        }
+        $tail = preg_replace('/<h1[^>]*>.*?<\/h1>/i', '', $partAHtml);
+        $tail = mb_substr(strip_tags((string) $tail), -1200, null, 'UTF-8');
+        $plainA = trim(preg_replace('/\s+/u', ' ', strip_tags($partAHtml)) ?? '');
+        $wordsA = $plainA !== '' ? count(preg_split('/ /u', $plainA)) : 0;
+        $remain = max(400, $targetWords - $wordsA);
+
+        $system = "Bạn là biên tập viên blog kiêm chuyên gia SEO/GEO người Việt. Viết TIẾP một bài blog đang dở. CHỈ trả về JSON object:\n"
+            . "{\n  \"content\": \"Phần nội dung TIẾP THEO bằng HTML, bắt đầu bằng <h2> của một mục MỚI\"\n}\n\n"
+            . "YÊU CẦU:\n"
+            . "- Viết phần còn lại khoảng {$remain} từ, mạch lạc nối tiếp phần trước, KHÔNG lặp lại nội dung đã viết.\n"
+            . "- HTML thuần, bắt đầu bằng <h2>, không dùng <h1>, không markdown.\n"
+            . "- BẮT BUỘC kết thúc bằng: một mục <h2>Câu hỏi thường gặp</h2> gồm 3-5 câu hỏi (mỗi câu là <h3> + <p> trả lời ngắn gọn), rồi mục <h2> kết luận cuối cùng.\n"
+            . "- Giữ chuẩn SEO/GEO như phần trước; KHÔNG chèn ảnh, iframe, link liên hệ hay thông tin quảng bá.\n"
+            . ai_content_rules();
+        $user = "TIÊU ĐỀ BÀI: " . ($title !== '' ? $title : $topic) . "\n"
+            . "TỪ KHÓA GỐC: $topic\n"
+            . "ĐOẠN CUỐI PHẦN ĐÃ VIẾT (tham khảo để nối tiếp, không lặp lại):\n\"$tail\"\n\nHãy viết phần còn lại của bài.";
+
+        $res = llm_chat([
+            ['role' => 'system', 'content' => $system],
+            ['role' => 'user', 'content' => $user],
+        ], array_replace([
+            'max_tokens' => 4000,
+            'temperature' => 0.7,
+            'response_format' => ['type' => 'json_object'],
+            'parse' => static fn(string $text): ?array => llm_parse_json_object($text),
+        ], $opts));
+
+        if (empty($res['ok'])) {
+            return [
+                'ok' => false, 'error' => $res['error'] ?? 'api_error',
+                'code' => $res['code'] ?? 'request_rejected',
+                'retryable' => !empty($res['retryable']), 'model' => $res['model_used'] ?? '',
+            ];
+        }
+        $parsed = is_array($res['parsed'] ?? null) ? $res['parsed'] : llm_parse_json_object((string) ($res['text'] ?? ''));
+        $content = is_array($parsed) ? trim((string) ($parsed['content'] ?? '')) : '';
+        $content = preg_replace('/^```[a-z]*\s*|\s*```$/i', '', $content);
+        $content = preg_replace('#<(/?)h1(\s[^>]*)?>#i', '<$1h2$2>', (string) $content);
+        if ($content === '' || stripos((string) $content, '<h2') === false) {
+            return [
+                'ok' => false, 'error' => llm_error('invalid_output')['error'],
+                'code' => 'invalid_output', 'retryable' => true, 'model' => $res['model_used'] ?? '',
+            ];
+        }
+        return ['ok' => true, 'content' => $content, 'model' => $res['model_used'] ?? ''];
+    }
+}

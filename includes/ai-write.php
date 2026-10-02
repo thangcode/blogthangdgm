@@ -1,0 +1,601 @@
+<?php
+/**
+ * Pipeline viết bài mới bằng AI từ tiêu đề/từ khóa (ai_jobs kind='write').
+ * Chạy trong CLI worker (scripts/ai-worker.php); file này không có side-effect session/endpoint.
+ *
+ * Stage flow: prepare -> write_thumb -> write_img_1..N -> write_article
+ *   -> write_article_b (chỉ khi bài dài >=1500 từ) -> seo -> save -> cache.
+ * Mỗi stage checkpoint riêng nên worker chết giữa chừng vẫn tiếp tục đúng chỗ.
+ */
+
+if (!function_exists('ai_write_ensure_schema')) {
+    /** Tạo lười bảng danh sách ý tưởng viết bài (idempotent). */
+    function ai_write_ensure_schema(PDO $pdo): bool
+    {
+        static $done = null;
+        if ($done !== null) return $done;
+        try {
+            $pdo->exec("CREATE TABLE IF NOT EXISTS ai_write_ideas (
+                id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+                owner_id BIGINT UNSIGNED NOT NULL,
+                idea VARCHAR(500) NOT NULL,
+                status VARCHAR(20) NOT NULL DEFAULT 'pending',
+                job_id BIGINT UNSIGNED DEFAULT NULL,
+                post_id BIGINT UNSIGNED DEFAULT NULL,
+                message VARCHAR(255) DEFAULT NULL,
+                created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                PRIMARY KEY (id),
+                KEY idx_aiw_owner_status (owner_id, status),
+                KEY idx_aiw_post (post_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+            $done = true;
+        } catch (Throwable $e) {
+            $done = false;
+        }
+        return $done;
+    }
+}
+
+if (!function_exists('ai_write_idea_touch')) {
+    /** Cập nhật trạng thái ý tưởng; nuốt lỗi để không làm hỏng luồng viết bài. */
+    function ai_write_idea_touch(PDO $pdo, int $ideaId, array $fields): void
+    {
+        if ($ideaId <= 0 || $fields === []) return;
+        try {
+            $allowed = ['status', 'job_id', 'post_id', 'message'];
+            $sets = [];
+            $values = [];
+            foreach ($fields as $k => $v) {
+                if (!in_array($k, $allowed, true)) continue;
+                $sets[] = '`' . $k . '`=?';
+                $values[] = $v;
+            }
+            if (!$sets) return;
+            $sets[] = 'updated_at=NOW()';
+            $values[] = $ideaId;
+            $pdo->prepare('UPDATE ai_write_ideas SET ' . implode(',', $sets) . ' WHERE id=?')->execute($values);
+        } catch (Throwable $e) {
+            // Không bắt buộc; UI sẽ tự đồng bộ trạng thái từ ai_jobs.
+        }
+    }
+}
+
+if (!function_exists('ai_write_next_image_stage')) {
+    /** Stage tiếp theo sau khi xong thumbnail / ảnh thứ $done. */
+    function ai_write_next_image_stage(array $cp, int $done): string
+    {
+        $count = (int) ($cp['image_count'] ?? 0);
+        return $done < $count ? 'write_img_' . ($done + 1) : 'write_article';
+    }
+}
+
+if (!function_exists('ai_write_prepare_next')) {
+    /** Stage đầu tiên sau prepare tuỳ cấu hình ảnh. */
+    function ai_write_prepare_next(array $cp): string
+    {
+        if (!empty($cp['want_thumb'])) return 'write_thumb';
+        return ai_write_next_image_stage($cp, 0);
+    }
+}
+
+if (!function_exists('ai_write_image_bytes')) {
+    /**
+     * Lấy bytes ảnh từ kết quả image model: data URI base64 hoặc URL HTTPS.
+     * HTTPS: không redirect, giới hạn 8MB, phải là ảnh hợp lệ (chống SSRF/đầu vào rác).
+     */
+    function ai_write_image_bytes(string $imageUrl, float $deadline): ?string
+    {
+        $imageUrl = trim($imageUrl);
+        if (strncasecmp($imageUrl, 'data:image/', 11) === 0) {
+            $comma = strpos($imageUrl, ',');
+            if ($comma === false) return null;
+            $data = base64_decode(substr($imageUrl, $comma + 1), true);
+            if ($data === false || strlen($data) > 8388608) return null;
+            return @getimagesizefromstring($data) !== false ? $data : null;
+        }
+        if (stripos($imageUrl, 'https://') !== 0 || !function_exists('curl_init')) {
+            return null;
+        }
+        $remaining = (int) floor(($deadline - microtime(true) - 0.25) * 1000);
+        if ($remaining < 250) {
+            throw new AiJobException('timeout', 'The worker time budget is exhausted.', true);
+        }
+        $body = '';
+        $ch = curl_init($imageUrl);
+        if ($ch === false) return null;
+        try {
+            curl_setopt_array($ch, [
+                CURLOPT_FOLLOWLOCATION => false, CURLOPT_MAXREDIRS => 0,
+                CURLOPT_PROTOCOLS => CURLPROTO_HTTPS, CURLOPT_SSL_VERIFYPEER => true,
+                CURLOPT_SSL_VERIFYHOST => 2, CURLOPT_CONNECTTIMEOUT_MS => min(5000, $remaining),
+                CURLOPT_TIMEOUT_MS => min(30000, $remaining), CURLOPT_NOSIGNAL => true,
+                CURLOPT_USERAGENT => 'BlogAiWrite/1.0',
+                CURLOPT_WRITEFUNCTION => static function ($handle, string $chunk) use (&$body): int {
+                    if (strlen($body) + strlen($chunk) > 8388608) return 0;
+                    $body .= $chunk;
+                    return strlen($chunk);
+                },
+            ]);
+            $ok = curl_exec($ch);
+            $status = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            return $ok !== false && $status >= 200 && $status < 300
+                && @getimagesizefromstring($body) !== false ? $body : null;
+        } finally {
+            curl_close($ch);
+        }
+    }
+}
+
+if (!function_exists('ai_write_store_image')) {
+    /**
+     * Ghi bytes ảnh ra assets/uploads/media/Y/m/ rồi nén WebP bằng compress_to_webp()
+     * (đúng pipeline nén hiện tại). Trả về path tương đối hoặc null.
+     */
+    function ai_write_store_image(int $jobId, int $seq, string $data, string $title): ?string
+    {
+        $info = @getimagesizefromstring($data);
+        if (!$info) return null;
+        $ext = [
+            'image/jpeg' => 'jpg', 'image/png' => 'png',
+            'image/gif' => 'gif', 'image/webp' => 'webp',
+        ][$info['mime'] ?? ''] ?? 'png';
+
+        $root = defined('ROOT_PATH') ? rtrim(ROOT_PATH, '/\\') . DIRECTORY_SEPARATOR : dirname(__DIR__) . DIRECTORY_SEPARATOR;
+        $ym = date('Y/m');
+        $dir = $root . 'assets/uploads/media/' . $ym . '/';
+        if (!is_dir($dir) && !@mkdir($dir, 0775, true) && !is_dir($dir)) return null;
+
+        $base = function_exists('create_slug') ? create_slug($title) : 'ai-image';
+        if ($base === '') $base = 'ai-image';
+        $stored = 'aiw-' . $jobId . '-' . $seq . '-' . mb_substr($base, 0, 40, 'UTF-8');
+        // Nếu bản .webp đã tồn tại (crash giữa chừng sau khi convert), tái dùng luôn.
+        $webp = $dir . $stored . '.webp';
+        if (is_file($webp)) {
+            return 'assets/uploads/media/' . $ym . '/' . $stored . '.webp';
+        }
+        $absolute = $dir . $stored . '.' . $ext;
+        if (!is_file($absolute)) {
+            $temp = $absolute . '.tmp-' . bin2hex(random_bytes(4));
+            if (@file_put_contents($temp, $data, LOCK_EX) === false) return null;
+            if (!@rename($temp, $absolute)) {
+                @unlink($temp);
+                return null;
+            }
+        }
+        // Nén WebP: trả về file .webp mới (xóa gốc) hoặc giữ nguyên nếu không convert được.
+        $final = function_exists('compress_to_webp')
+            ? compress_to_webp($absolute, 82, 1600)
+            : $absolute;
+        if (!is_string($final) || !is_file($final)) $final = $absolute;
+        return 'assets/uploads/media/' . $ym . '/' . basename($final);
+    }
+}
+
+if (!function_exists('ai_write_generate_image')) {
+    /**
+     * Gọi image model, lấy bytes, lưu + nén WebP. Trả path tương đối hoặc null;
+     * lỗi retryable của provider thì throw để job thử lại. Caller đăng ký media
+     * library sau khi checkpoint/transaction commit thành công.
+     */
+    function ai_write_generate_image(int $jobId, int $seq, string $prompt, string $title, float $deadline): ?string
+    {
+        $res = llm_call_feature('image', [['role' => 'user', 'content' => $prompt]], ai_runner_llm_options($deadline));
+        if (empty($res['ok'])) {
+            throw ai_runner_error($res);
+        }
+        $bytes = ai_write_image_bytes((string) ($res['image_url'] ?? ''), $deadline);
+        if ($bytes === null) return null;
+        return ai_write_store_image($jobId, $seq, $bytes, $title);
+    }
+}
+
+if (!function_exists('ai_write_register_media')) {
+    /** Đăng ký file đã lưu vào media library (best-effort, nuốt lỗi). */
+    function ai_write_register_media(string $rel, string $title): void
+    {
+        if (!function_exists('register_media_file') || $rel === '') return;
+        $root = defined('ROOT_PATH') ? rtrim(ROOT_PATH, '/\\') . DIRECTORY_SEPARATOR : dirname(__DIR__) . DIRECTORY_SEPARATOR;
+        try {
+            register_media_file(ai_jobs_pdo(), $root . str_replace('/', DIRECTORY_SEPARATOR, $rel), $rel, $title);
+        } catch (Throwable $e) {
+            // Media library là phụ trợ; không làm hỏng job chính.
+        }
+    }
+}
+
+if (!function_exists('ai_write_prepare')) {
+    /**
+     * Stage 'prepare': tạo bài nháp (status=0) hoặc gắn lại bài đã tạo (idempotent
+     * qua posts.ai_import_token theo job id — retry không tạo trùng).
+     */
+    function ai_write_prepare(array &$job): void
+    {
+        $payload = $job['payload'];
+        $topic = trim(strip_tags((string) ($payload['topic'] ?? '')));
+        if ($topic === '') {
+            throw new AiJobException('invalid_input', 'A topic or title is required.');
+        }
+        $topic = mb_substr($topic, 0, 500, 'UTF-8');
+        $targetWords = max(400, min(3000, (int) ($payload['target_words'] ?? 1200)));
+        $imageCount = max(0, min(3, (int) ($payload['image_count'] ?? 0)));
+        $withThumb = !empty($payload['with_thumb']);
+        $statusTarget = (int) ($payload['status'] ?? 0);
+        if (!in_array($statusTarget, [0, 1, 2], true)) $statusTarget = 0;
+        $categoryId = max(0, (int) ($payload['category_id'] ?? 0));
+        $author = mb_substr(trim((string) ($payload['author_name'] ?? 'Admin')), 0, 255, 'UTF-8');
+        if ($author === '') $author = 'Admin';
+        $title = mb_substr($topic, 0, 255, 'UTF-8');
+        $token = hash('sha256', 'ai-write-job:' . (string) $job['id']);
+        $twoPass = $targetWords >= 1500;
+
+        ai_job_transaction($job, static function (PDO $pdo) use (&$job, $payload, $topic, $title, $token, $targetWords, $imageCount, $withThumb, $statusTarget, $categoryId, $author, $twoPass): void {
+            $row = null;
+            $id = 0;
+            if (!empty($job['entity_id'])) {
+                $row = ai_runner_load_entity($pdo, 'post', (int) $job['entity_id'], true);
+                $id = (int) $job['entity_id'];
+            } else {
+                $find = $pdo->prepare('SELECT * FROM posts WHERE ai_import_token=? LIMIT 1');
+                $find->execute([$token]);
+                $row = $find->fetch(PDO::FETCH_ASSOC) ?: null;
+                if ($row) $id = (int) $row['id'];
+            }
+            $created = 0;
+            if (!$row) {
+                $slugBase = create_slug($title);
+                $slugBase = $slugBase !== '' ? mb_substr($slugBase, 0, 200, 'UTF-8') : 'bai-viet';
+                $slug = $slugBase;
+                $lookup = $pdo->prepare('SELECT id FROM posts WHERE slug = ? LIMIT 1');
+                for ($attempt = 0; $attempt < 5; $attempt++) {
+                    $lookup->execute([$slug]);
+                    if (!$lookup->fetchColumn()) break;
+                    $slug = $slugBase . '-' . bin2hex(random_bytes(6));
+                }
+                $pdo->prepare("INSERT INTO posts (title, slug, summary, content, status, schema_type, thumbnail, thumbnail_alt, author_name, ai_import_token, created_at, updated_at)
+                    VALUES (?, ?, '', '', 0, 'BlogPosting', '', '', ?, ?, NOW(), NOW())")
+                    ->execute([$title, $slug, $author, $token]);
+                $id = (int) $pdo->lastInsertId();
+                $created = 1;
+                $pdo->prepare("INSERT INTO audit_logs (user_id,username,action,resource_type,resource_id,details,ip_address,user_agent) VALUES (?, 'AI Worker', 'ai_write_created', 'post', ?, ?, '', '')")
+                    ->execute([(int) $job['owner_id'], $id, 'ai-write:' . $token]);
+                if ($categoryId > 0 && function_exists('blog_sync_post_categories')) {
+                    $primary = blog_sync_post_categories($pdo, $id, [$categoryId]);
+                    if ($primary !== null) {
+                        $pdo->prepare('UPDATE posts SET primary_category_id=? WHERE id=?')->execute([$primary, $id]);
+                    }
+                }
+                $stored = $pdo->prepare('SELECT * FROM posts WHERE id=? LIMIT 1');
+                $stored->execute([$id]);
+                $row = $stored->fetch(PDO::FETCH_ASSOC) ?: ['id' => $id, 'title' => $title, 'slug' => $slug];
+            }
+
+            $cp = [
+                'entity_kind' => 'post', 'row' => $row, 'title' => (string) ($row['title'] ?? $title),
+                'topic' => $topic, 'target_words' => $targetWords, 'image_count' => $imageCount,
+                'want_thumb' => $withThumb, 'status_target' => $statusTarget,
+                'category_id' => $categoryId, 'author_name' => $author, 'two_pass' => $twoPass,
+                'import_token' => $token, 'save' => true, 'persisted' => true, 'dirty' => true,
+                'cache_invalidated' => false, 'snapshot' => ai_entity_snapshot($row, 'post'),
+                'tags_snapshot' => ai_runner_post_tags_snapshot($pdo, $id),
+                'images' => [], 'warnings' => [],
+            ];
+            $ideaId = (int) ($payload['idea_id'] ?? 0);
+            if ($ideaId > 0) {
+                ai_write_idea_touch($pdo, $ideaId, [
+                    'status' => 'running', 'job_id' => (int) $job['id'], 'post_id' => $id,
+                    'message' => '',
+                ]);
+            }
+            $next = ai_write_prepare_next($cp);
+            $job['entity_id'] = $id;
+            $job['checkpoint'] = $cp;
+            $job['stage'] = $next;
+            $job['result'] = [
+                'success' => true, 'id' => $id, 'title' => (string) ($row['title'] ?? $title),
+                'saved' => true, 'created' => $created, 'edit_url' => 'edit.php?id=' . $id,
+            ];
+        });
+    }
+}
+
+if (!function_exists('ai_write_thumbnail')) {
+    /**
+     * Stage 'write_thumb': tạo thumbnail bằng image model + nén WebP + ghi posts.thumbnail.
+     * Provider lỗi retryable -> throw để stage chạy lại; lỗi vĩnh viễn/không cấu hình
+     * -> cảnh báo và đi tiếp (không chặn việc viết bài).
+     */
+    function ai_write_thumbnail(array &$job, float $deadline): void
+    {
+        $cp = $job['checkpoint'];
+        $next = ai_write_next_image_stage($cp, 0);
+        if (empty($job['entity_id'])) {
+            ai_job_checkpoint($job, $cp, $next);
+            return;
+        }
+        $pdo = ai_jobs_pdo();
+        $current = ai_runner_load_entity($pdo, 'post', (int) $job['entity_id']);
+        ai_runner_assert_snapshot($job, $current, 'post', $pdo);
+        if (trim((string) ($current['thumbnail'] ?? '')) !== '' || !empty($cp['thumbnail'])) {
+            ai_job_checkpoint($job, $cp, $next);
+            return;
+        }
+        if (!function_exists('llm_feature_available') || !llm_feature_available('image')) {
+            $cp['warnings'][] = ['code' => 'image_not_configured', 'message' => 'Chưa cấu hình model tạo ảnh; bài viết không có thumbnail tự động.'];
+            ai_job_checkpoint($job, $cp, $next);
+            return;
+        }
+        $prompt = 'Ảnh thumbnail đại diện cho bài blog, phong cách minh họa hiện đại, sạch, chuyên nghiệp, màu sắc hài hòa, TUYỆT ĐỐI không có chữ/text/watermark/logo trong ảnh. Chủ đề: "' . (string) ($cp['topic'] ?? $cp['title']) . '"';
+        try {
+            $thumbnail = ai_write_generate_image((int) $job['id'], 0, $prompt, (string) $cp['title'], $deadline);
+        } catch (AiJobException $e) {
+            if ($e->retryable) throw $e;
+            $cp['warnings'][] = ['code' => 'thumbnail_failed', 'message' => 'Không tạo được thumbnail: ' . ai_jobs_safe_message($e->errorCode)];
+            ai_job_checkpoint($job, $cp, $next);
+            return;
+        }
+        if ($thumbnail === null) {
+            $cp['warnings'][] = ['code' => 'thumbnail_failed', 'message' => 'Không lưu được thumbnail từ dữ liệu AI trả về.'];
+            ai_job_checkpoint($job, $cp, $next);
+            return;
+        }
+        $deleteOrphan = static function (string $rel): void {
+            $root = defined('ROOT_PATH') ? rtrim(ROOT_PATH, '/\\') . DIRECTORY_SEPARATOR : dirname(__DIR__) . DIRECTORY_SEPARATOR;
+            $absolute = $root . str_replace('/', DIRECTORY_SEPARATOR, $rel);
+            if (is_file($absolute)) @unlink($absolute);
+        };
+        try {
+            ai_job_transaction($job, static function (PDO $pdo) use (&$job, $cp, $thumbnail, $next): void {
+                $current = ai_runner_load_entity($pdo, 'post', (int) $job['entity_id'], true);
+                ai_runner_assert_snapshot($job, $current, 'post', $pdo);
+                $alt = mb_substr((string) ($cp['title'] ?? ''), 0, 255, 'UTF-8');
+                $stmt = $pdo->prepare("UPDATE posts SET thumbnail=?, thumbnail_alt=? WHERE id=? AND (thumbnail IS NULL OR thumbnail='')");
+                $stmt->execute([$thumbnail, $alt, (int) $job['entity_id']]);
+                if ($stmt->rowCount() !== 1) {
+                    $cp['warnings'][] = ['code' => 'thumbnail_conflict', 'message' => 'Thumbnail đã được đặt thủ công; giữ ảnh hiện có.'];
+                } else {
+                    $cp['thumbnail'] = $thumbnail;
+                }
+                $stored = ai_runner_load_entity($pdo, 'post', (int) $job['entity_id']);
+                $cp['row'] = $stored;
+                $cp['snapshot'] = ai_entity_snapshot($stored, 'post');
+                $cp['tags_snapshot'] = ai_runner_post_tags_snapshot($pdo, (int) $job['entity_id']);
+                $cp['dirty'] = true;
+                $cp['cache_invalidated'] = false;
+                $cp['persisted'] = true;
+                $job['checkpoint'] = $cp;
+                $job['stage'] = $next;
+                $job['result'] = ai_runner_result($job, $cp);
+            });
+        } catch (Throwable $e) {
+            // Transaction rollback -> post không tham chiếu file; xóa file mồ côi.
+            $deleteOrphan($thumbnail);
+            throw $e;
+        }
+        if (($job['checkpoint']['thumbnail'] ?? '') === $thumbnail) {
+            ai_write_register_media($thumbnail, (string) $cp['title']);
+        } else {
+            // Admin đã đặt thumbnail khác trong lúc chạy -> file vừa tạo không được dùng.
+            $deleteOrphan($thumbnail);
+        }
+    }
+}
+
+if (!function_exists('ai_write_image_step')) {
+    /**
+     * Stage 'write_img_N': tạo ảnh minh họa thứ N trong nội dung (tối đa 3),
+     * lưu + nén WebP, path nằm trong checkpoint['images'] để chèn vào HTML lúc save.
+     */
+    function ai_write_image_step(array &$job, float $deadline, int $index): void
+    {
+        $cp = $job['checkpoint'];
+        $imageCount = (int) ($cp['image_count'] ?? 0);
+        $next = ai_write_next_image_stage($cp, $index);
+        if ($index < 1 || $index > $imageCount) {
+            ai_job_checkpoint($job, $cp, $next);
+            return;
+        }
+        $cp['images'] = is_array($cp['images'] ?? null) ? $cp['images'] : [];
+        if (count($cp['images']) >= $index) {
+            ai_job_checkpoint($job, $cp, $next);
+            return;
+        }
+        if (!function_exists('llm_feature_available') || !llm_feature_available('image')) {
+            $cp['warnings'][] = ['code' => 'image_not_configured', 'message' => 'Chưa cấu hình model tạo ảnh; bỏ qua ảnh minh họa.'];
+            ai_job_checkpoint($job, $cp, 'write_article');
+            return;
+        }
+        $angles = [
+            1 => 'khái niệm tổng quan, bối cảnh sử dụng',
+            2 => 'quy trình hoặc các bước thực hiện',
+            3 => 'kết quả, lợi ích thực tế đạt được',
+        ];
+        $angle = $angles[$index] ?? $angles[1];
+        $prompt = 'Ảnh minh họa trong bài blog, phong cách hiện đại sạch, chuyên nghiệp, không có chữ/text/watermark. Chủ đề bài viết: "' . (string) ($cp['topic'] ?? $cp['title']) . '" — khía cạnh minh họa: ' . $angle . '.';
+        try {
+            $rel = ai_write_generate_image((int) $job['id'], $index, $prompt, (string) $cp['title'], $deadline);
+        } catch (AiJobException $e) {
+            if ($e->retryable) throw $e;
+            $cp['warnings'][] = ['code' => 'image_failed', 'message' => 'Không tạo được ảnh minh họa ' . $index . ': ' . ai_jobs_safe_message($e->errorCode)];
+            ai_job_checkpoint($job, $cp, $next);
+            return;
+        }
+        if ($rel === null) {
+            $cp['warnings'][] = ['code' => 'image_failed', 'message' => 'Không lưu được ảnh minh họa ' . $index . '.'];
+            ai_job_checkpoint($job, $cp, $next);
+            return;
+        }
+        $cp['images'][] = $rel;
+        ai_job_checkpoint($job, $cp, $next, ai_runner_result($job, $cp));
+        ai_write_register_media($rel, (string) $cp['title']);
+    }
+}
+
+if (!function_exists('ai_write_article')) {
+    /** Stage 'write_article': pass A — tiêu đề + mô tả + (toàn bộ | phần đầu) nội dung. */
+    function ai_write_article(array &$job, float $deadline): void
+    {
+        $cp = $job['checkpoint'];
+        if (trim((string) ($cp['content'] ?? '')) !== '' && empty($cp['two_pass'])) {
+            ai_job_checkpoint($job, $cp, 'seo', ai_runner_result($job, $cp));
+            return;
+        }
+        $res = ai_generate_topic_article((string) ($cp['topic'] ?? $cp['title']), (int) ($cp['target_words'] ?? 1200), ai_runner_llm_options($deadline));
+        if (empty($res['ok'])) throw ai_runner_error($res);
+        if (trim((string) ($res['title'] ?? '')) !== '') $cp['title'] = (string) $res['title'];
+        $cp['description'] = (string) ($res['description'] ?? '');
+        $cp['content'] = (string) ($res['content'] ?? '');
+        $cp['model'] = (string) ($res['model'] ?? '');
+        $next = !empty($res['needs_part_b']) && !empty($cp['two_pass']) ? 'write_article_b' : 'seo';
+        ai_job_checkpoint($job, $cp, $next, ai_runner_result($job, $cp));
+    }
+}
+
+if (!function_exists('ai_write_article_b')) {
+    /** Stage 'write_article_b': pass B — phần còn lại + FAQ + kết luận cho bài dài. */
+    function ai_write_article_b(array &$job, float $deadline): void
+    {
+        $cp = $job['checkpoint'];
+        $partA = trim((string) ($cp['content'] ?? ''));
+        if ($partA === '') {
+            ai_job_checkpoint($job, $cp, 'write_article');
+            return;
+        }
+        $res = ai_continue_topic_article((string) ($cp['topic'] ?? ''), (string) ($cp['title'] ?? ''), $partA, (int) ($cp['target_words'] ?? 1500), ai_runner_llm_options($deadline));
+        if (empty($res['ok'])) throw ai_runner_error($res);
+        $cp['content'] = rtrim($partA) . "\n" . (string) $res['content'];
+        $cp['model'] = (string) ($res['model'] ?? $cp['model'] ?? '');
+        ai_job_checkpoint($job, $cp, 'seo', ai_runner_result($job, $cp));
+    }
+}
+
+if (!function_exists('ai_write_finalize')) {
+    /**
+     * Stage 'save': chèn ảnh vào nội dung, cập nhật post (title/slug/nội dung/SEO/status),
+     * đồng bộ category + tags, ghi audit. Chạy trong transaction của ai_job_transaction.
+     */
+    function ai_write_finalize(array &$job): void
+    {
+        $cp = $job['checkpoint'];
+        $content = trim((string) ($cp['content'] ?? ''));
+        if ($content === '' || empty($job['entity_id'])) {
+            throw new AiJobException('invalid_output', 'The generated article is empty.');
+        }
+        $images = is_array($cp['images'] ?? null) ? $cp['images'] : [];
+        if ($images && function_exists('embed_images_in_content')) {
+            // Chuẩn convention site: đường dẫn trong content có leading slash.
+            $images = array_map(static fn($p) => '/' . ltrim((string) $p, '/'), $images);
+            $content = embed_images_in_content($content, $images, (string) ($cp['title'] ?? ''));
+            $cp['content'] = $content;
+        }
+        $statusTarget = (int) ($cp['status_target'] ?? 0);
+        if (!in_array($statusTarget, [0, 1, 2], true)) $statusTarget = 0;
+        $categoryId = (int) ($cp['category_id'] ?? 0);
+
+        ai_job_transaction($job, static function (PDO $pdo) use (&$job, $cp, $statusTarget, $categoryId): void {
+            $current = ai_runner_load_entity($pdo, 'post', (int) $job['entity_id'], true);
+            ai_runner_assert_snapshot($job, $current, 'post', $pdo);
+
+            $title = mb_substr(trim(strip_tags((string) ($cp['title'] ?? ''))), 0, 255, 'UTF-8');
+            if ($title === '') $title = (string) $current['title'];
+
+            // Đổi slug theo tiêu đề AI mới (bài đang nháp, chưa public nên an toàn).
+            $slug = (string) ($current['slug'] ?? '');
+            if ($title !== (string) $current['title']) {
+                $base = create_slug($title);
+                if ($base !== '') {
+                    $base = mb_substr($base, 0, 200, 'UTF-8');
+                    if ($base !== $slug) {
+                        $candidate = $base;
+                        $lookup = $pdo->prepare('SELECT id FROM posts WHERE slug = ? AND id <> ? LIMIT 1');
+                        for ($attempt = 0; $attempt < 5; $attempt++) {
+                            $lookup->execute([$candidate, (int) $job['entity_id']]);
+                            if (!$lookup->fetchColumn()) break;
+                            $candidate = $base . '-' . bin2hex(random_bytes(6));
+                        }
+                        $slug = $candidate;
+                    }
+                }
+            }
+
+            $summary = trim((string) ($cp['description'] ?? ''));
+            $pdo->prepare('UPDATE posts SET title=?, slug=?, summary=?, content=?, meta_title=?, meta_description=?, meta_keywords=?, focus_keyword=?, status=?, updated_at=NOW() WHERE id=?')
+                ->execute([
+                    $title, $slug, $summary, (string) $cp['content'],
+                    (string) ($cp['meta_title'] ?? ''), (string) ($cp['meta_description'] ?? ''),
+                    (string) ($cp['meta_keywords'] ?? ''), (string) ($cp['focus_keyword'] ?? ''),
+                    $statusTarget, (int) $job['entity_id'],
+                ]);
+
+            if ($categoryId > 0 && function_exists('blog_sync_post_categories')) {
+                $primary = blog_sync_post_categories($pdo, (int) $job['entity_id'], [$categoryId]);
+                if ($primary !== null) {
+                    $pdo->prepare('UPDATE posts SET primary_category_id=? WHERE id=?')->execute([$primary, (int) $job['entity_id']]);
+                }
+            }
+            if (!empty($cp['meta_keywords']) && function_exists('blog_sync_post_tags')) {
+                blog_sync_post_tags($pdo, (int) $job['entity_id'], (string) $cp['meta_keywords']);
+            }
+            $pdo->prepare("INSERT INTO audit_logs (user_id,username,action,resource_type,resource_id,details,ip_address,user_agent) VALUES (?, 'AI Worker', 'ai_write_saved', 'post', ?, ?, '', '')")
+                ->execute([(int) $job['owner_id'], (int) $job['entity_id'], 'status=' . $statusTarget]);
+
+            $stored = ai_runner_load_entity($pdo, 'post', (int) $job['entity_id']);
+            $cp['row'] = $stored;
+            $cp['title'] = $title;
+            $ideaId = (int) ($job['payload']['idea_id'] ?? 0);
+            if ($ideaId > 0) {
+                ai_write_idea_touch($pdo, $ideaId, [
+                    'status' => 'done', 'post_id' => (int) $job['entity_id'],
+                    'message' => 'Đã viết xong.',
+                ]);
+            }
+            $cp['snapshot'] = ai_entity_snapshot($stored, 'post');
+            $cp['tags_snapshot'] = ai_runner_post_tags_snapshot($pdo, (int) $job['entity_id']);
+            $cp['dirty'] = true;
+            $cp['cache_invalidated'] = false;
+            $cp['persisted'] = true;
+            $job['checkpoint'] = $cp;
+            $job['stage'] = 'cache';
+            $result = ai_runner_result($job, $cp);
+            $result['url'] = '/' . ltrim($slug, '/') . '/';
+            $result['edit_url'] = 'edit.php?id=' . (int) $job['entity_id'];
+            $result['message'] = 'Đã viết xong bài "' . $title . '".';
+            $job['result'] = $result;
+        });
+    }
+}
+
+if (!function_exists('ai_run_write_stage')) {
+    /** Dispatcher cho kind='write'; 'seo'/'cache' tái dùng stage chung của runner. */
+    function ai_run_write_stage(array &$job, float $deadline): void
+    {
+        switch ((string) $job['stage']) {
+            case 'prepare':
+                ai_write_prepare($job);
+                return;
+            case 'write_thumb':
+                ai_write_thumbnail($job, $deadline);
+                return;
+            case 'write_article':
+                ai_write_article($job, $deadline);
+                return;
+            case 'write_article_b':
+                ai_write_article_b($job, $deadline);
+                return;
+            case 'seo':
+                ai_runner_run_seo($job, $deadline);
+                return;
+            case 'save':
+                ai_write_finalize($job);
+                return;
+            case 'cache':
+                ai_runner_cache($job);
+                return;
+        }
+        if (preg_match('/^write_img_(\d+)$/', (string) $job['stage'], $m)) {
+            ai_write_image_step($job, $deadline, (int) $m[1]);
+            return;
+        }
+        throw new AiJobException('invalid_input', 'The write job stage is not supported.');
+    }
+}

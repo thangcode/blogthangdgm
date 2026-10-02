@@ -87,12 +87,125 @@ if (!function_exists('ai_write_prepare_next')) {
 }
 
 if (!function_exists('ai_write_gen_topic')) {
-    /** Chủ đề đưa vào prompt: tiêu đề + mô tả/yêu cầu thêm (nếu idea có brief). */
+    /**
+     * Chủ đề đưa vào prompt: tiêu đề + mô tả/yêu cầu thêm + dữ liệu tin tức
+     * tham khảo (grounding). Research được ưu tiên làm cơ sở sự thật thay
+     * trí nhớ model — quan trọng với chủ đề tin tức/sự kiện mới.
+     */
     function ai_write_gen_topic(array $cp): string
     {
         $topic = (string) ($cp['topic'] ?? $cp['title'] ?? '');
         $brief = trim((string) ($cp['brief'] ?? ''));
-        return $brief !== '' ? $topic . "\n\nMÔ TẢ / YÊU CẦU THÊM CHO BÀI VIẾT: " . $brief : $topic;
+        if ($brief !== '') {
+            $topic .= "\n\nMÔ TẢ / YÊU CẦU THÊM CHO BÀI VIẾT: " . $brief;
+        }
+        $research = trim((string) ($cp['research'] ?? ''));
+        if ($research !== '') {
+            $topic .= "\n\nDỮ LIỆU TIN TỨC MỚI NHẤT ĐÃ KIỂM CHỨNG (ưu tiên làm cơ sở sự thật — viết bám sát các sự kiện, tên gọi, thời điểm trong đây; KHÔNG viết kiểu 'chưa xác nhận' khi nguồn đã nêu rõ):\n" . $research;
+        }
+        return $topic;
+    }
+}
+
+if (!function_exists('ai_write_research_llm')) {
+    /**
+     * Research tầng 1: dùng model chat có search grounding thật qua provider.
+     * Hiện hỗ trợ: gemini -> tools[google_search]; grok -> search_parameters.
+     * Quét mọi model chat đang bật (không chỉ model đã gán tính năng), thử tối đa
+     * 4 model — model từ chối tool thì bỏ qua, thử model kế tiếp.
+     */
+    function ai_write_research_llm(string $topic, float $deadline): string
+    {
+        try { $pdo = function_exists('ai_jobs_pdo') ? ai_jobs_pdo() : llm_pdo(); } catch (Throwable $e) { return ''; }
+        if (!$pdo) return '';
+        try {
+            $st = $pdo->query("SELECT m.* FROM ai_models m JOIN ai_providers p ON p.id = m.provider_id
+                               WHERE m.status = 1 AND p.status = 1 AND m.kind = 'chat'
+                               ORDER BY m.sort_order ASC, m.id ASC");
+            $cands = $st ? $st->fetchAll() : [];
+        } catch (Throwable $e) { $cands = []; }
+        $tried = 0;
+        foreach ($cands as $m) {
+            $m['provider'] = llm_get_provider($pdo, (int) ($m['provider_id'] ?? 0));
+            if (empty($m['provider']) || (string) ($m['provider']['api_type'] ?? 'openai') !== 'openai') continue;
+            $name = strtolower((string) ($m['model_name'] ?? ''));
+            $opts = ['deadline' => $deadline, 'max_tokens' => 800, 'temperature' => 0.2];
+            if (strpos($name, 'gemini') !== false) {
+                $opts['tools'] = [['google_search' => new stdClass()]];
+            } elseif (strpos($name, 'grok') !== false) {
+                $opts['search_parameters'] = ['mode' => 'on'];
+            } else {
+                continue; // model không rõ cơ chế search -> bỏ qua, tránh bịa dữ kiện
+            }
+            if (++$tried > 4 || microtime(true) + 2 >= $deadline) break;
+            $res = llm_call_model($m, [
+                ['role' => 'system', 'content' => 'Bạn là trợ lý nghiên cứu tin tức. Dùng công cụ search để lấy thông tin MỚI NHẤT, THẬT về chủ đề. Trả về tối đa 10 dòng bullet, mỗi dòng 1 dữ kiện đã xác nhận (sự kiện, ngày, tên, số liệu, nguồn). Không bình luận, không suy đoán. Nếu chủ đề hoàn toàn không có tin tức liên quan thì trả lời đúng 1 từ: NONE'],
+                ['role' => 'user', 'content' => 'Chủ đề: ' . $topic],
+            ], $opts);
+            if (empty($res['ok'])) continue;
+            $text = trim((string) ($res['text'] ?? ''));
+            if ($text === '' || strtoupper($text) === 'NONE') continue;
+            return mb_substr($text, 0, 3000, 'UTF-8');
+        }
+        return '';
+    }
+}
+
+if (!function_exists('ai_write_research_rss')) {
+    /**
+     * Research tầng 2 (fallback): headline tin tức gần đây từ Google News RSS
+     * (không cần API key/model). Trả "• Tiêu đề — Nguồn (dd/mm/yyyy)" hoặc ''.
+     */
+    function ai_write_research_rss(string $topic, float $deadline): string
+    {
+        $topic = trim($topic);
+        if ($topic === '' || !function_exists('curl_init')) return '';
+        $remaining = (int) floor(($deadline - microtime(true) - 0.5) * 1000);
+        if ($remaining < 1500) return '';
+        $ch = curl_init('https://news.google.com/rss/search?q=' . rawurlencode($topic) . '&hl=vi&gl=VN&ceid=VN:vi');
+        if ($ch === false) return '';
+        $body = '';
+        try {
+            curl_setopt_array($ch, [
+                CURLOPT_RETURNTRANSFER => true, CURLOPT_FOLLOWLOCATION => false, CURLOPT_MAXREDIRS => 0,
+                CURLOPT_PROTOCOLS => CURLPROTO_HTTPS, CURLOPT_SSL_VERIFYPEER => true, CURLOPT_SSL_VERIFYHOST => 2,
+                CURLOPT_CONNECTTIMEOUT_MS => min(5000, $remaining), CURLOPT_TIMEOUT_MS => min(12000, $remaining),
+                CURLOPT_NOSIGNAL => true, CURLOPT_USERAGENT => 'Mozilla/5.0 (compatible; BlogAiWrite/1.0)',
+            ]);
+            $body = (string) curl_exec($ch);
+            if ((int) curl_getinfo($ch, CURLINFO_HTTP_CODE) !== 200) return '';
+        } catch (Throwable $e) {
+            return '';
+        } finally {
+            curl_close($ch);
+        }
+        $xml = @simplexml_load_string($body);
+        if (!$xml) return '';
+        $lines = [];
+        foreach ($xml->channel->item ?? [] as $item) {
+            $title = trim(preg_replace('/\s+/u', ' ', (string) $item->title) ?? '');
+            if ($title === '') continue;
+            $src = trim((string) ($item->source ?? ''));
+            $ts = strtotime((string) ($item->pubDate ?? ''));
+            $lines[] = '• ' . $title . ($src !== '' ? ' — ' . $src : '') . ($ts ? ' (' . date('d/m/Y', $ts) . ')' : '');
+            if (count($lines) >= 8) break;
+        }
+        return implode("\n", $lines);
+    }
+}
+
+if (!function_exists('ai_write_research')) {
+    /**
+     * Grounding cho bài viết: ưu tiên model search thật (google_search / live
+     * search) để có dữ kiện đầy đủ; không được thì dùng Google News RSS.
+     * Luôn fail-safe: lỗi mọi tầng -> '' (prompt không đổi, bài vẫn viết được).
+     */
+    function ai_write_research(string $topic, float $deadline): string
+    {
+        if (trim($topic) === '') return '';
+        $llm = ai_write_research_llm($topic, $deadline);
+        if ($llm !== '') return $llm;
+        return ai_write_research_rss($topic, $deadline);
     }
 }
 
@@ -250,7 +363,7 @@ if (!function_exists('ai_write_prepare')) {
         $token = hash('sha256', $ideaId > 0 ? 'ai-write-idea:' . $ideaId : 'ai-write-job:' . (string) $job['id']);
         $twoPass = $targetWords >= 1500;
 
-        ai_job_transaction($job, static function (PDO $pdo) use (&$job, $payload, $topic, $title, $token, $targetWords, $imageCount, $withThumb, $statusTarget, $categoryId, $author, $twoPass): void {
+        ai_job_transaction($job, static function (PDO $pdo) use (&$job, $payload, $topic, $brief, $ideaId, $title, $token, $targetWords, $imageCount, $withThumb, $statusTarget, $categoryId, $author, $twoPass): void {
             $row = null;
             $id = 0;
             if (!empty($job['entity_id'])) {
@@ -470,6 +583,11 @@ if (!function_exists('ai_write_article')) {
         if (trim((string) ($cp['content'] ?? '')) !== '' && empty($cp['two_pass'])) {
             ai_job_checkpoint($job, $cp, 'seo', ai_runner_result($job, $cp));
             return;
+        }
+        // Grounding: lấy tin tức mới nhất trước khi viết (cache trong checkpoint
+        // để retry không fetch lại). Lỗi fetch -> '' -> prompt giữ nguyên.
+        if (!isset($cp['research'])) {
+            $cp['research'] = ai_write_research((string) ($cp['topic'] ?? $cp['title'] ?? ''), $deadline);
         }
         $res = ai_generate_topic_article(ai_write_gen_topic($cp), (int) ($cp['target_words'] ?? 1200), ai_runner_llm_options($deadline));
         if (empty($res['ok'])) throw ai_runner_error($res);

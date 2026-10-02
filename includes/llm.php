@@ -528,6 +528,14 @@ if (!function_exists('llm_chat_raw')) {
         if (!empty($opts['response_format'])) {
             $body['response_format'] = $opts['response_format'];
         }
+        // Pass-through tham số provider-specific: tools (google_search...),
+        // search_parameters (xAI Live Search), plugins, hoặc gộp extra_body.
+        foreach (['tools', 'search_parameters', 'web_search_options', 'plugins'] as $bk) {
+            if (isset($opts[$bk])) $body[$bk] = $opts[$bk];
+        }
+        if (is_array($opts['extra_body'] ?? null)) {
+            $body = array_replace($body, $opts['extra_body']);
+        }
         $http = llm_http_json($endpoint . '/chat/completions', [
             'Content-Type: application/json',
             'Authorization: Bearer ' . $api_key,
@@ -1210,6 +1218,7 @@ if (!function_exists('ai_generate_topic_article')) {
             . "- CHUẨN SEO: suy ra từ khóa chính từ tiêu đề, đặt vào đoạn mở đầu; rải từ khóa + từ đồng nghĩa (LSI) tự nhiên trong các <h2>/<h3> và đoạn văn; không nhồi nhét.\n"
             . "- CHUẨN GEO (tối ưu cho Google AI Overviews, ChatGPT, Perplexity): trả lời trực tiếp, rõ ràng ngay đầu mỗi mục; nêu dữ kiện cụ thể (số liệu, bước làm, ví dụ) để AI dễ trích dẫn; nêu rõ thực thể (tên công cụ, nền tảng, khái niệm).\n"
             . "- KHÔNG bịa thông tin kiểm chứng: không tự đặt số liệu giá cả/thống kê cụ thể nếu không chắc; nêu xu hướng/khung tham khảo thay vì con số tuyệt đối khi thiếu dữ kiện.\n"
+            . "- Nếu đề bài có mục \"DỮ LIỆU TIN TỨC MỚI NHẤT\": đó là tin báo chí thật, mới hơn trí nhớ của bạn — BẮT BUỘC dùng làm cơ sở sự thật (sự kiện, tên gọi, thời điểm, bên liên quan), viết như tin tức đã xảy ra, có thể nêu nguồn/ngày; KHÔNG được viết kiểu 'chưa được xác nhận/kiểm chứng' khi nguồn đã nêu rõ.\n"
             . ai_content_rules();
         $user = "TIÊU ĐỀ / TỪ KHÓA BÀI VIẾT: $topic\n\nHãy viết bài blog theo đúng yêu cầu.";
 

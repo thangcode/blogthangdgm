@@ -13,7 +13,7 @@ require_once 'includes/url-helper.php';
 
 // Start XML output
 echo '<?xml version="1.0" encoding="UTF-8"?>' . "\n";
-echo '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' . "\n";
+echo '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:video="http://www.google.com/schemas/sitemap-video/1.1">' . "\n";
 
 $redirected_paths = [];
 try {
@@ -24,7 +24,7 @@ try {
 } catch (Throwable $e) {}
 
 // Helper function to output URL entry
-function outputUrl($loc, $lastmod = null, $changefreq = 'weekly', $priority = '0.5')
+function outputUrl($loc, $lastmod = null, $changefreq = 'weekly', $priority = '0.5', array $videos = [])
 {
     global $redirected_paths;
     
@@ -54,7 +54,36 @@ function outputUrl($loc, $lastmod = null, $changefreq = 'weekly', $priority = '0
     }
     echo "    <changefreq>{$changefreq}</changefreq>\n";
     echo "    <priority>{$priority}</priority>\n";
+    foreach ($videos as $v) {
+        echo "    <video:video>\n";
+        echo "      <video:thumbnail_loc>" . htmlspecialchars($v['thumbnail_loc']) . "</video:thumbnail_loc>\n";
+        echo "      <video:title>" . htmlspecialchars(mb_substr((string) $v['title'], 0, 200)) . "</video:title>\n";
+        echo "      <video:description>" . htmlspecialchars(mb_substr((string) $v['description'], 0, 2048)) . "</video:description>\n";
+        echo "      <video:player_loc allow_embed=\"yes\">" . htmlspecialchars($v['player_loc']) . "</video:player_loc>\n";
+        if (!empty($v['publication_date'])) {
+            echo "      <video:publication_date>" . htmlspecialchars($v['publication_date']) . "</video:publication_date>\n";
+        }
+        echo "    </video:video>\n";
+    }
     echo "  </url>\n";
+}
+
+/**
+ * Lấy danh sách YouTube video id trong nội dung bài (iframe embed, watch URL, youtu.be, shorts).
+ * Bản rút gọn của blog_extract_youtube_id — endpoint này không load includes/blog.php.
+ */
+function sitemap_youtube_ids(string $html): array
+{
+    if ($html === '' || stripos($html, 'youtu') === false) {
+        return [];
+    }
+    $html = html_entity_decode($html, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+    preg_match_all(
+        '~(?:youtu\.be/|youtube(?:-nocookie)?\.com/(?:watch\?(?:[^"\s]*&)?v=|embed/|shorts/))([A-Za-z0-9_-]{11})~i',
+        $html,
+        $m
+    );
+    return array_values(array_unique($m[1] ?? []));
 }
 
 function tableHasColumn(PDO $pdo, string $table, string $column): bool
@@ -93,10 +122,27 @@ try {
         outputUrl(categoryUrl($category['slug'], true), $category['created_at'], 'weekly', '0.8');
     }
 
-    // 4. Bài viết (root /{slug}/)
-    $stmt = $pdo->query("SELECT slug, created_at, updated_at FROM posts WHERE status = 1 ORDER BY created_at DESC");
-    foreach ($stmt->fetchAll() as $post) {
-        outputUrl(postUrl($post['slug'], true), $post['updated_at'] ?: $post['created_at'], 'weekly', '0.7');
+    // 4. Bài viết (root /{slug}/) — kèm <video:video> cho bài có nhúng YouTube
+    $post_cols = 'slug, title, content, created_at, updated_at'
+        . (tableHasColumn($pdo, 'posts', 'meta_description') ? ', meta_description' : '')
+        . (tableHasColumn($pdo, 'posts', 'summary') ? ', summary' : '');
+    $post_sql = "SELECT {$post_cols} FROM posts WHERE status = 1"
+        . (tableHasColumn($pdo, 'posts', 'deleted_at') ? ' AND deleted_at IS NULL' : '')
+        . " ORDER BY created_at DESC";
+    $stmt = $pdo->query($post_sql);
+    while ($post = $stmt->fetch()) {
+        $videos = [];
+        $desc = trim(strip_tags((string) (($post['meta_description'] ?? '') ?: ($post['summary'] ?? ''))));
+        foreach (sitemap_youtube_ids((string) ($post['content'] ?? '')) as $yt_id) {
+            $videos[] = [
+                'thumbnail_loc'    => 'https://i.ytimg.com/vi/' . $yt_id . '/hqdefault.jpg',
+                'title'            => (string) $post['title'],
+                'description'      => $desc !== '' ? $desc : (string) $post['title'],
+                'player_loc'       => 'https://www.youtube.com/embed/' . $yt_id,
+                'publication_date' => date('c', strtotime($post['created_at'])),
+            ];
+        }
+        outputUrl(postUrl($post['slug'], true), $post['updated_at'] ?: $post['created_at'], 'weekly', '0.7', $videos);
     }
 
     // 5. Tag (chỉ tag có bài)
